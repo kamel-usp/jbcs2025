@@ -1,0 +1,17 @@
+models:
+  model:
+    name: bert-base-multilingual-cased
+    num_labels: 5
+    output_dir: ./results/mbert
+  dataset:
+    grade_index: 0
+cache_dir: C:\temp
+dataset:
+  name: kamel-usp/aes_enem_dataset
+  split: JBCS2025
+training_params:
+  train_batch_size: 16
+  eval_batch_size: 16
+  learning_rate: 2.0e-05
+  num_train_epochs: 3
+  weight_decay: 0.01

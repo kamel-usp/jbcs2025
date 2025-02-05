@@ -1,0 +1,7 @@
+model:
+  name: "bert-base-multilingual-cased"
+  num_labels: 5
+  output_dir: "./results/mbert"
+
+dataset:
+  grade_index: 0
