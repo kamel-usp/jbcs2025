@@ -1,15 +1,23 @@
 defaults:
+  - _self_
   - experiments: mbert/C1
 
-cache_dir: "C:\\temp"
+cache_dir: "/media/data/tmp"
 
 dataset:
   name: "kamel-usp/aes_enem_dataset"
   split: "JBCS2025"
 
 training_params:
+  seed: 42
   train_batch_size: 16
   eval_batch_size: 16
-  learning_rate: 2e-5
-  num_train_epochs: 3
+  gradient_accumulation_steps: 1
+  gradient_checkpointing: False
+  warmup_steps: 10
+  learning_rate: 5e-5
+  num_train_epochs: 20
   weight_decay: 0.01
+  logging_steps: 100
+  metric_for_best_model: "QWK"
+  bf16: True

@@ -2,9 +2,9 @@ import hydra
 from omegaconf import DictConfig
 from transformers import AutoModelForSequenceClassification
 
-@hydra.main(config_path="configs", config_name="config.yaml")
+@hydra.main(config_path="configs", config_name="config.yaml", version_base="1.1")
 def load_model(cfg: DictConfig):
-    model_cfg = cfg.model
+    model_cfg = cfg.experiments.model
     model = AutoModelForSequenceClassification.from_pretrained(
         model_cfg.name,
         num_labels=model_cfg.num_labels
