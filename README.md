@@ -22,9 +22,9 @@ pip install uv
    cd jbcs2025
    ```
 
-2. **Create a virtual environment:**
+2. **Synchronize dependencies:**
    ```sh
-   uv venv .venv
+   uv sync
    ```
 
 3. **Activate the virtual environment:**
@@ -36,17 +36,6 @@ pip install uv
      ```sh
      .venv\Scripts\activate
      ```
-
-4. **Synchronize dependencies:**
-   ```sh
-   uv sync
-   ```
-
-5. **Run the project (if applicable):**
-   ```sh
-   python main.py
-   ```
-
 ### Dependency Management
 - To add a new dependency, use:
   ```sh
