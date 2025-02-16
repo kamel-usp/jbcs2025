@@ -1,0 +1,15 @@
+model:
+  name: "neuralmind/bert-base-portuguese-cased"
+  num_labels: 6
+  output_dir: "./results/bertimbau_base/C1"
+  logging_dir: "./logs/bertimbau_base/C1"
+  best_model_dir: "./results/bertimbau_base/C1/best_model"
+
+dataset:
+  grade_index: 0
+
+training_id: "bertimbau-base-C1" 
+
+training_params:
+  weight_decay: 0.01
+  warmup_steps: 10

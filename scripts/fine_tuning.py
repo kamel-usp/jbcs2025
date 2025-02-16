@@ -58,10 +58,10 @@ def fine_tune_pipeline(experiment_config: DictConfig):
         per_device_eval_batch_size=experiment_config.training_params.eval_batch_size,
         gradient_accumulation_steps=experiment_config.training_params.gradient_accumulation_steps,
         gradient_checkpointing=experiment_config.training_params.gradient_checkpointing,
-        warmup_steps=experiment_config.training_params.warmup_steps,
+        warmup_steps=experiment_config.experiments.training_params.warmup_steps,
         learning_rate=experiment_config.training_params.learning_rate,
         num_train_epochs=experiment_config.training_params.num_train_epochs,
-        weight_decay=experiment_config.training_params.weight_decay,
+        weight_decay=experiment_config.experiments.training_params.weight_decay,
         # For logging and saving
         logging_dir=str(Path(experiment_config.experiments.model.logging_dir).resolve()),
         logging_steps=experiment_config.training_params.logging_steps,

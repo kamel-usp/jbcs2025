@@ -1,6 +1,7 @@
 defaults:
   - _self_
-  - experiments: mbert/C1
+  - experiments: large_models/C1
+
 
 cache_dir: "/media/data/tmp"
 
@@ -14,10 +15,8 @@ training_params:
   eval_batch_size: 16
   gradient_accumulation_steps: 1
   gradient_checkpointing: False
-  warmup_steps: 10
   learning_rate: 5e-5
   num_train_epochs: 20
-  weight_decay: 0.01
   logging_steps: 100
   metric_for_best_model: "QWK"
   bf16: True
