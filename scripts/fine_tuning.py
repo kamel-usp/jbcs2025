@@ -33,7 +33,9 @@ def fine_tune_pipeline(experiment_config: DictConfig, logger: Logger):
 
     # Load the tokenizer
     tokenizer = load_tokenizer(
-        experiment_config.experiments.model.name, cache_dir=experiment_config.cache_dir
+        experiment_config.experiments.model.type,
+        experiment_config.experiments.model.name,
+        cache_dir=experiment_config.cache_dir,
     )
 
     # Tokenize the dataset
@@ -47,7 +49,7 @@ def fine_tune_pipeline(experiment_config: DictConfig, logger: Logger):
     )
 
     # Load the model
-    model = ModelFactory.create_model(experiment_config)
+    model = ModelFactory.create_model(experiment_config, logger)
 
     # Set up training arguments
     training_args = TrainingArguments(

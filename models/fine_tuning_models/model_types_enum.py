@@ -2,4 +2,4 @@ from enum import Enum
 
 class ModelTypesEnum(Enum):
     ENCODER_CLASSIFICATION = "encoder_classification"
-    DECODER_CLASSIFICATION_LORA = "decoder_classification_lora"
+    PHI3_CLASSIFICATION_LORA = "phi3_classification_lora"

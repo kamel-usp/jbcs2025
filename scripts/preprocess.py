@@ -21,7 +21,7 @@ from scripts.constants.prompts.phi_models import (  # noqa: E402
 LABEL2ID = {0: 0, 40: 1, 80: 2, 120: 3, 160: 4, 200: 5}
 
 
-def load_tokenizer(model_name: str, cache_dir: str):
+def load_tokenizer(model_type: str, model_name: str, cache_dir: str):
     """
     Load the tokenizer for the specified model.
 
@@ -31,8 +31,9 @@ def load_tokenizer(model_name: str, cache_dir: str):
     Returns:
         tokenizer: The loaded tokenizer.
     """
-    tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
-    return tokenizer
+    if model_type == ModelTypesEnum.PHI3_CLASSIFICATION_LORA.value:
+        return AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir, pad_token="<|dummy_id_0|>", trust_remote_code=True)
+    return AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
 
 
 def process_grades(example, grade_index: int):
@@ -73,7 +74,7 @@ def get_tokenize_function(
             )
         tokenize_function_def = tokenize_function
 
-    if model_type == ModelTypesEnum.DECODER_CLASSIFICATION_LORA.value:
+    if model_type == ModelTypesEnum.PHI3_CLASSIFICATION_LORA.value:
 
         def tokenize_function(examples: List[str]):
             padding = "longest"

@@ -1,7 +1,10 @@
 from omegaconf import DictConfig
-from transformers import AutoModelForSequenceClassification
 from peft import LoraConfig, TaskType, get_peft_model
-
+from transformers import (
+    AutoModelForSequenceClassification,
+    Phi3ForSequenceClassification,
+)
+from logging import Logger
 
 ID2LABEL = {0: 0, 1: 40, 2: 80, 3: 120, 4: 160, 5: 200}
 
@@ -20,7 +23,7 @@ def load_model_with_classification_head(cfg: DictConfig):
     return model
 
 
-def load_classification_head_with_lora(cfg: DictConfig):
+def load_phi3_classification_lora(cfg: DictConfig, logger: Logger):
     model_cfg = cfg.experiments.model
     lora_config = LoraConfig(
         r=model_cfg.lora_r,
@@ -30,7 +33,7 @@ def load_classification_head_with_lora(cfg: DictConfig):
         target_modules=model_cfg.lora_target_modules,
     )
 
-    model = AutoModelForSequenceClassification.from_pretrained(
+    model = Phi3ForSequenceClassification.from_pretrained(
         model_cfg.name,
         num_labels=model_cfg.num_labels,
         id2label=ID2LABEL,
@@ -44,4 +47,5 @@ def load_classification_head_with_lora(cfg: DictConfig):
 
     model = get_peft_model(model, lora_config)
     model.config.pad_token_id = model.config.eos_token_id
+    logger.info(model.print_trainable_parameters())
     return model

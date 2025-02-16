@@ -1,6 +1,6 @@
 model:
   name: "microsoft/Phi-3-mini-128k-instruct"
-  type: "decoder_classification_lora"
+  type: "phi3_classification_lora"
   num_labels: 6
   output_dir: "./results/phi3_mini/C1"
   logging_dir: "./logs/phi3_mini/C1"
