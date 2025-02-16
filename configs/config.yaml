@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - experiments: large_models/C1
+  - experiments: base_models/C1
 
 
 cache_dir: "/media/data/tmp"
@@ -11,10 +11,6 @@ dataset:
 
 training_params:
   seed: 42
-  train_batch_size: 16
-  eval_batch_size: 16
-  gradient_accumulation_steps: 1
-  gradient_checkpointing: False
   learning_rate: 5e-5
   num_train_epochs: 20
   logging_steps: 100

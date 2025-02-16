@@ -1,18 +1,19 @@
 # train.py
 import sys
-from pathlib import Path
-import hydra
-from omegaconf import DictConfig
-from datasets import load_dataset
-from transformers import Trainer, TrainingArguments, EarlyStoppingCallback
-import transformers
-from preprocess import load_tokenizer, tokenize_dataset
 from functools import partial
+from logging import Logger
+from pathlib import Path
+
+import transformers
+from datasets import load_dataset
+from omegaconf import DictConfig
+from preprocess import load_tokenizer, tokenize_dataset
+from transformers import EarlyStoppingCallback, Trainer, TrainingArguments
 
 # Append the parent directory to sys.path using pathlib
 parent_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
-from models.fine_tuning_models.classification_head import load_model  # NOQA
+from models.fine_tuning_models.model_factory import ModelFactory  # NOQA
 from metrics.metrics import compute_metrics  # NOQA
 
 transformers.logging.set_verbosity_info()
@@ -21,8 +22,8 @@ EVALUATION_STRATEGY = "epoch"
 SAVE_TOTAL_LIMIT = 1
 REPORT_TO_LIST = ["tensorboard"]
 
-@hydra.main(version_base="1.1", config_path="../configs", config_name="config.yaml")
-def fine_tune_pipeline(experiment_config: DictConfig):
+
+def fine_tune_pipeline(experiment_config: DictConfig, logger: Logger):
     # Load the dataset
     dataset = load_dataset(
         experiment_config.dataset.name,
@@ -41,11 +42,12 @@ def fine_tune_pipeline(experiment_config: DictConfig):
         tokenizer,
         text_column="essay_text",
         grade_index=experiment_config.experiments.dataset.grade_index,
+        model_type=experiment_config.experiments.model.type,
+        logger=logger,
     )
 
     # Load the model
-    model = load_model(experiment_config)
-
+    model = ModelFactory.create_model(experiment_config)
 
     # Set up training arguments
     training_args = TrainingArguments(
@@ -54,16 +56,18 @@ def fine_tune_pipeline(experiment_config: DictConfig):
         output_dir=str(Path(experiment_config.experiments.model.output_dir).resolve()),
         eval_strategy=EVALUATION_STRATEGY,
         # Fine Tuning Related
-        per_device_train_batch_size=experiment_config.training_params.train_batch_size,
-        per_device_eval_batch_size=experiment_config.training_params.eval_batch_size,
-        gradient_accumulation_steps=experiment_config.training_params.gradient_accumulation_steps,
-        gradient_checkpointing=experiment_config.training_params.gradient_checkpointing,
+        per_device_train_batch_size=experiment_config.experiments.training_params.train_batch_size,
+        per_device_eval_batch_size=experiment_config.experiments.training_params.eval_batch_size,
+        gradient_accumulation_steps=experiment_config.experiments.training_params.gradient_accumulation_steps,
+        gradient_checkpointing=experiment_config.experiments.training_params.gradient_checkpointing,
         warmup_steps=experiment_config.experiments.training_params.warmup_steps,
         learning_rate=experiment_config.training_params.learning_rate,
         num_train_epochs=experiment_config.training_params.num_train_epochs,
         weight_decay=experiment_config.experiments.training_params.weight_decay,
         # For logging and saving
-        logging_dir=str(Path(experiment_config.experiments.model.logging_dir).resolve()),
+        logging_dir=str(
+            Path(experiment_config.experiments.model.logging_dir).resolve()
+        ),
         logging_steps=experiment_config.training_params.logging_steps,
         log_level=LOGGING_LEVEL,
         save_strategy=EVALUATION_STRATEGY,
