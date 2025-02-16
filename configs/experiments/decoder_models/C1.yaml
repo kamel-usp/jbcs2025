@@ -1,6 +1,6 @@
 model:
   name: "microsoft/Phi-3-mini-128k-instruct"
-  type: "decoder_classification_head"
+  type: "decoder_classification_lora"
   num_labels: 6
   output_dir: "./results/phi3_mini/C1"
   logging_dir: "./logs/phi3_mini/C1"
@@ -18,7 +18,7 @@ training_id: "phi3-mini-128k-C1"
 training_params:
   weight_decay: 0.1
   warmup_steps: 100
-  train_batch_size: 16
-  eval_batch_size: 16
-  gradient_accumulation_steps: 1
-  gradient_checkpointing: False
+  train_batch_size: 2
+  eval_batch_size: 2
+  gradient_accumulation_steps: 16
+  gradient_checkpointing: True

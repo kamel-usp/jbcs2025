@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - experiments: base_models/C1
+  - experiments: decoder_models/C1
 
 
 cache_dir: "/media/data/tmp"

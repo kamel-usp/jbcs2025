@@ -57,11 +57,12 @@ def get_tokenize_function(
     model_type: str,
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     text_column: str,
+    grade_index: int,
     logger: Logger,
 ):
     padding = None
     truncation = None
-    tokenize_function = None
+    tokenize_function_def = None
     if model_type == ModelTypesEnum.ENCODER_CLASSIFICATION.value:
         padding = "max_length"
         truncation = True
@@ -70,6 +71,7 @@ def get_tokenize_function(
             return tokenizer(
                 examples[text_column], padding=padding, truncation=truncation
             )
+        tokenize_function_def = tokenize_function
 
     if model_type == ModelTypesEnum.DECODER_CLASSIFICATION_LORA.value:
 
@@ -77,17 +79,17 @@ def get_tokenize_function(
             padding = "longest"
             truncation = False
 
-            def _prompt_template(self, essay_example):
+            def _prompt_template(essay_example):
                 instructions_text = None
-                if self.reference_concept == 0:
+                if grade_index == 0:
                     instructions_text = f"<|system|>\n{CONCEPT1_SYSTEM}<|end|>\n"
-                elif self.reference_concept == 1:
+                elif grade_index == 1:
                     instructions_text = f"<|system|>\n{CONCEPT2_SYSTEM}<|end|>\n"
-                elif self.reference_concept == 2:
+                elif grade_index == 2:
                     instructions_text = f"<|system|>\n{CONCEPT3_SYSTEM}<|end|>\n"
-                elif self.reference_concept == 3:
+                elif grade_index == 3:
                     instructions_text = f"<|system|>\n{CONCEPT4_SYSTEM}<|end|>\n"
-                elif self.reference_concept == 4:
+                elif grade_index == 4:
                     instructions_text = f"<|system|>\n{CONCEPT5_SYSTEM}<|end|>\n"
 
                 user_role = f"<|user|>Qual é a nota da redação a seguir?\n\n{essay_example}<|end|>\n"
@@ -108,15 +110,16 @@ def get_tokenize_function(
                 padding=padding,
                 truncation=truncation,
             )
+        tokenize_function_def = tokenize_function
 
-    if tokenize_function is None:
+    if tokenize_function_def is None:
         raise ValueError(
-            "tokenize_function should be a function. However, it is being set to None."
+            "tokenize_function_def should be a function. However, it is being set to None."
         )
     logger.info(
         f"Tokenizer function parameters- Padding:{padding}; Truncation: {truncation}"
     )
-    return tokenize_function
+    return tokenize_function_def
 
 
 def tokenize_dataset(
@@ -142,7 +145,7 @@ def tokenize_dataset(
     # Process the 'grades' column
     dataset = dataset.map(lambda x: process_grades(x, grade_index))
     tokenize_function = get_tokenize_function(
-        model_type, tokenizer, text_column, logger
+        model_type, tokenizer, text_column, grade_index, logger
     )
     tokenized_dataset = dataset.map(tokenize_function, batched=True)
     return tokenized_dataset
