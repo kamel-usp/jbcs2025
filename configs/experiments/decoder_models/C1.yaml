@@ -5,6 +5,10 @@ model:
   output_dir: "./results/phi3_mini/C1"
   logging_dir: "./logs/phi3_mini/C1"
   best_model_dir: "./results/phi3_mini/C1/best_model"
+  lora_r: 256
+  lora_dropout: 0.15
+  lora_alpha: 32
+  lora_target_modules: "all-linear"
 
 dataset:
   grade_index: 0
