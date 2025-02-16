@@ -1,7 +1,11 @@
 model:
-  name: "bert-base-multilingual-cased"
-  num_labels: 5
-  output_dir: "./results/mbert"
+  name: "google-bert/bert-base-multilingual-cased"
+  num_labels: 6
+  output_dir: "./results/mbert/C1"
+  logging_dir: "./logs/mbert/C1"
+  best_model_dir: "./results/mbert/C1/best_model"
 
 dataset:
   grade_index: 0
+
+training_id: "mbert-base-C1" 

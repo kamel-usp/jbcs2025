@@ -4,57 +4,93 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig
 from datasets import load_dataset
-from transformers import Trainer, TrainingArguments
+from transformers import Trainer, TrainingArguments, EarlyStoppingCallback
+import transformers
 from preprocess import load_tokenizer, tokenize_dataset
+from functools import partial
 
 # Append the parent directory to sys.path using pathlib
 parent_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
-from models.fine_tuning_models.model import load_model #NOQA
+from models.fine_tuning_models.classification_head import load_model  # NOQA
+from metrics.metrics import compute_metrics  # NOQA
 
+transformers.logging.set_verbosity_info()
+LOGGING_LEVEL = "info"
 EVALUATION_STRATEGY = "epoch"
+SAVE_TOTAL_LIMIT = 1
+REPORT_TO_LIST = ["tensorboard"]
 
 @hydra.main(version_base="1.1", config_path="../configs", config_name="config.yaml")
-def fine_tune_pipeline(cfg: DictConfig):
+def fine_tune_pipeline(experiment_config: DictConfig):
     # Load the dataset
-    dataset = load_dataset(cfg.dataset.name, cfg.dataset.split, cache_dir=cfg.cache_dir)
+    dataset = load_dataset(
+        experiment_config.dataset.name,
+        experiment_config.dataset.split,
+        cache_dir=experiment_config.cache_dir,
+    )
 
     # Load the tokenizer
-    tokenizer = load_tokenizer(cfg.experiments.model.name, cache_dir=cfg.cache_dir)
+    tokenizer = load_tokenizer(
+        experiment_config.experiments.model.name, cache_dir=experiment_config.cache_dir
+    )
 
     # Tokenize the dataset
     tokenized_dataset = tokenize_dataset(
         dataset,
         tokenizer,
         text_column="essay_text",
-        grade_index=cfg.experiments.dataset.grade_index,
+        grade_index=experiment_config.experiments.dataset.grade_index,
     )
 
     # Load the model
-    model = load_model(cfg)
+    model = load_model(experiment_config)
+
 
     # Set up training arguments
     training_args = TrainingArguments(
-        output_dir=cfg.experiments.model.output_dir,
-        evaluation_strategy=EVALUATION_STRATEGY,
-        learning_rate=cfg.training_params.learning_rate,
-        per_device_train_batch_size=cfg.training_params.train_batch_size,
-        per_device_eval_batch_size=cfg.training_params.eval_batch_size,
-        num_train_epochs=cfg.training_params.num_train_epochs,
-        weight_decay=cfg.training_params.weight_decay,
+        seed=experiment_config.training_params.seed,
+        data_seed=experiment_config.training_params.seed,
+        output_dir=str(Path(experiment_config.experiments.model.output_dir).resolve()),
+        eval_strategy=EVALUATION_STRATEGY,
+        # Fine Tuning Related
+        per_device_train_batch_size=experiment_config.training_params.train_batch_size,
+        per_device_eval_batch_size=experiment_config.training_params.eval_batch_size,
+        gradient_accumulation_steps=experiment_config.training_params.gradient_accumulation_steps,
+        gradient_checkpointing=experiment_config.training_params.gradient_checkpointing,
+        warmup_steps=experiment_config.training_params.warmup_steps,
+        learning_rate=experiment_config.training_params.learning_rate,
+        num_train_epochs=experiment_config.training_params.num_train_epochs,
+        weight_decay=experiment_config.training_params.weight_decay,
+        # For logging and saving
+        logging_dir=str(Path(experiment_config.experiments.model.logging_dir).resolve()),
+        logging_steps=experiment_config.training_params.logging_steps,
+        log_level=LOGGING_LEVEL,
+        save_strategy=EVALUATION_STRATEGY,
+        save_total_limit=SAVE_TOTAL_LIMIT,
+        load_best_model_at_end=True,
+        metric_for_best_model=experiment_config.training_params.metric_for_best_model,
+        bf16=experiment_config.training_params.bf16,
+        report_to=REPORT_TO_LIST,
     )
+
+    compute_metrics_partial = partial(compute_metrics, model=model)
 
     # Initialize the Trainer
     trainer = Trainer(
         model=model,
-        args=training_args,
         train_dataset=tokenized_dataset["train"],
         eval_dataset=tokenized_dataset["validation"],
-        tokenizer=tokenizer,
+        args=training_args,
+        compute_metrics=compute_metrics_partial,
+        callbacks=(
+            [EarlyStoppingCallback(early_stopping_patience=5)]
+            if tokenized_dataset["validation"]
+            else []
+        ),
     )
-
     # Start training
-    trainer.train()
+    return trainer, tokenized_dataset
 
 
 if __name__ == "__main__":

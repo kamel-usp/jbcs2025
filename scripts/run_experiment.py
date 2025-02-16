@@ -1,34 +1,78 @@
-import argparse
-from fine_tuning import fine_tune_pipeline
-from transformers import set_seed
-import hydra
-import torch
+import logging
+import os
 import random
+import sys
+from datetime import datetime
+from pathlib import Path
+
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
+import hydra
 import numpy as np
+import torch
+from fine_tuning import fine_tune_pipeline
+from omegaconf import DictConfig, OmegaConf
+from transformers import set_seed
 
-RANDOM_SEED = 42
+# Append the parent directory to sys.path using pathlib
+parent_dir = Path(__file__).resolve().parent.parent
+sys.path.append(str(parent_dir))
+from metrics.metrics import save_evaluation_results_to_csv  # NOQA
 
-def main():
-    parser = argparse.ArgumentParser(description="Run an experiment with fine_tuning.")
-    # You can add additional command line arguments here if needed
-    parser.add_argument("--config-path", type=str, default="../configs",
-                        help="Path to the Hydra configuration file.")
-    args = parser.parse_args()
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+transformers_logger = logging.getLogger("transformers")
+transformers_logger.setLevel(logging.INFO)
+transformers_logger.propagate = True
+logger = logging.getLogger(__name__)
 
-    print("Starting experiment using config:", args.config_path)
-    set_seed(RANDOM_SEED)
-    torch.manual_seed(RANDOM_SEED)
-    np.random.seed(RANDOM_SEED)
-    random.seed(RANDOM_SEED)
+
+@hydra.main(version_base="1.1", config_path="../configs/", config_name="config")
+def main(cfg: DictConfig):
+    logger.info(OmegaConf.to_yaml(cfg))
+
+    set_seed(cfg.training_params.seed)
+    torch.manual_seed(cfg.training_params.seed)
+    np.random.seed(cfg.training_params.seed)
+    random.seed(cfg.training_params.seed)
 
     # If using CUDA
-    torch.cuda.manual_seed_all(RANDOM_SEED)
+    torch.cuda.manual_seed_all(cfg.training_params.seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True)
 
-    hydra.initialize(config_path=args.config_path)
-    cfg = hydra.compose(config_name="config")
-    fine_tune_pipeline(cfg)
+    logger.info("Starting the training process.")
+    trainer, tokenized_dataset = fine_tune_pipeline(cfg)
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    evaluate_baseline = trainer.evaluate()
+    save_evaluation_results_to_csv(
+        cfg.experiments.training_id,
+        evaluate_baseline,
+        current_time,
+        "baseline_evaluation",
+    )
+    trainer.train()
+    evaluate_after_training = trainer.evaluate()
+    save_evaluation_results_to_csv(
+        cfg.experiments.training_id,
+        evaluate_after_training,
+        current_time,
+        "evaluation_after_training",
+    )
+    logger.info("Training completed successfully.")
+    logger.info("Running on Test")
+    evaluate_test = trainer.evaluate(tokenized_dataset["test"])
+    save_evaluation_results_to_csv(
+        cfg.experiments.training_id,
+        evaluate_test,
+        current_time,
+        "test_set_after_training",
+    )
+    trainer.save_model(cfg.experiments.model.best_model_dir)
+    logger.info("Fine Tuning Finished.")
+
 
 if __name__ == "__main__":
     main()
