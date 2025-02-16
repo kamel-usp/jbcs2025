@@ -1,8 +1,11 @@
 import logging
+import os
 import random
 import sys
 from datetime import datetime
 from pathlib import Path
+
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 import hydra
 import numpy as np
@@ -19,7 +22,9 @@ from metrics.metrics import save_evaluation_results_to_csv  # NOQA
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-logging.getLogger("transformers").setLevel(logging.INFO)
+transformers_logger = logging.getLogger("transformers")
+transformers_logger.setLevel(logging.INFO)
+transformers_logger.propagate = True
 logger = logging.getLogger(__name__)
 
 
@@ -34,24 +39,38 @@ def main(cfg: DictConfig):
 
     # If using CUDA
     torch.cuda.manual_seed_all(cfg.training_params.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True)
 
     logger.info("Starting the training process.")
     trainer, tokenized_dataset = fine_tune_pipeline(cfg)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     evaluate_baseline = trainer.evaluate()
-    save_evaluation_results_to_csv(cfg.training_id, evaluate_baseline, current_time)
+    save_evaluation_results_to_csv(
+        cfg.experiments.training_id,
+        evaluate_baseline,
+        current_time,
+        "baseline_evaluation",
+    )
     trainer.train()
     evaluate_after_training = trainer.evaluate()
     save_evaluation_results_to_csv(
-        cfg.experiments.training_id, evaluate_after_training, current_time
+        cfg.experiments.training_id,
+        evaluate_after_training,
+        current_time,
+        "evaluation_after_training",
     )
     logger.info("Training completed successfully.")
     logger.info("Running on Test")
     evaluate_test = trainer.evaluate(tokenized_dataset["test"])
     save_evaluation_results_to_csv(
-        cfg.experiments.training_id, evaluate_test, current_time
+        cfg.experiments.training_id,
+        evaluate_test,
+        current_time,
+        "test_set_after_training",
     )
-    trainer.save_model(cfg.experiments.model.best_model_path)
+    trainer.save_model(cfg.experiments.model.best_model_dir)
     logger.info("Fine Tuning Finished.")
 
 

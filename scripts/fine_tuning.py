@@ -5,6 +5,7 @@ import hydra
 from omegaconf import DictConfig
 from datasets import load_dataset
 from transformers import Trainer, TrainingArguments, EarlyStoppingCallback
+import transformers
 from preprocess import load_tokenizer, tokenize_dataset
 from functools import partial
 
@@ -14,9 +15,11 @@ sys.path.append(str(parent_dir))
 from models.fine_tuning_models.classification_head import load_model  # NOQA
 from metrics.metrics import compute_metrics  # NOQA
 
+transformers.logging.set_verbosity_info()
+LOGGING_LEVEL = "info"
 EVALUATION_STRATEGY = "epoch"
 SAVE_TOTAL_LIMIT = 1
-REPORT_TO_LIST = ["none"]
+REPORT_TO_LIST = ["tensorboard"]
 
 @hydra.main(version_base="1.1", config_path="../configs", config_name="config.yaml")
 def fine_tune_pipeline(experiment_config: DictConfig):
@@ -43,12 +46,13 @@ def fine_tune_pipeline(experiment_config: DictConfig):
     # Load the model
     model = load_model(experiment_config)
 
+
     # Set up training arguments
     training_args = TrainingArguments(
         seed=experiment_config.training_params.seed,
         data_seed=experiment_config.training_params.seed,
-        output_dir=experiment_config.experiments.model.output_dir,
-        evaluation_strategy=EVALUATION_STRATEGY,
+        output_dir=str(Path(experiment_config.experiments.model.output_dir).resolve()),
+        eval_strategy=EVALUATION_STRATEGY,
         # Fine Tuning Related
         per_device_train_batch_size=experiment_config.training_params.train_batch_size,
         per_device_eval_batch_size=experiment_config.training_params.eval_batch_size,
@@ -59,8 +63,9 @@ def fine_tune_pipeline(experiment_config: DictConfig):
         num_train_epochs=experiment_config.training_params.num_train_epochs,
         weight_decay=experiment_config.training_params.weight_decay,
         # For logging and saving
-        logging_dir=experiment_config.experiments.model.logging_dir,
+        logging_dir=str(Path(experiment_config.experiments.model.logging_dir).resolve()),
         logging_steps=experiment_config.training_params.logging_steps,
+        log_level=LOGGING_LEVEL,
         save_strategy=EVALUATION_STRATEGY,
         save_total_limit=SAVE_TOTAL_LIMIT,
         load_best_model_at_end=True,
