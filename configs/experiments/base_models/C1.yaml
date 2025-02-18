@@ -14,6 +14,7 @@ training_id: "mbert_base-C1"
 training_params:
   weight_decay: 0.01
   warmup_steps: 10
+  learning_rate: 5e-5
   train_batch_size: 16
   eval_batch_size: 16
   gradient_accumulation_steps: 1

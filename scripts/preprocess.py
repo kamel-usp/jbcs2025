@@ -32,7 +32,12 @@ def load_tokenizer(model_type: str, model_name: str, cache_dir: str):
         tokenizer: The loaded tokenizer.
     """
     if model_type == ModelTypesEnum.PHI3_CLASSIFICATION_LORA.value:
-        return AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir, pad_token="<|dummy_id_0|>", trust_remote_code=True)
+        return AutoTokenizer.from_pretrained(
+            model_name,
+            cache_dir=cache_dir,
+            pad_token="<|dummy_id_0|>",
+            trust_remote_code=True,
+        )
     return AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
 
 
@@ -67,19 +72,23 @@ def get_tokenize_function(
     if model_type == ModelTypesEnum.ENCODER_CLASSIFICATION.value:
         padding = "max_length"
         truncation = True
+        padding_side = "right"
 
         def tokenize_function(examples: List[str]):
             return tokenizer(
-                examples[text_column], padding=padding, truncation=truncation
+                examples[text_column], padding=padding, truncation=truncation, padding_side=padding_side
             )
+
         tokenize_function_def = tokenize_function
 
-    if model_type == ModelTypesEnum.PHI3_CLASSIFICATION_LORA.value:
-
+    if model_type in [
+        ModelTypesEnum.PHI3_CLASSIFICATION_LORA.value,
+        ModelTypesEnum.PHI4_CLASSIFICATION_LORA.value,
+    ]:
+        padding = "longest"
+        truncation = False
+        padding_side = "left"
         def tokenize_function(examples: List[str]):
-            padding = "longest"
-            truncation = False
-
             def _prompt_template(essay_example):
                 instructions_text = None
                 if grade_index == 0:
@@ -110,7 +119,9 @@ def get_tokenize_function(
                 return_tensors="pt",
                 padding=padding,
                 truncation=truncation,
+                padding_side=padding_side
             )
+
         tokenize_function_def = tokenize_function
 
     if tokenize_function_def is None:

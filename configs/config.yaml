@@ -11,7 +11,6 @@ dataset:
 
 training_params:
   seed: 42
-  learning_rate: 5e-5
   num_train_epochs: 20
   logging_steps: 100
   metric_for_best_model: "QWK"

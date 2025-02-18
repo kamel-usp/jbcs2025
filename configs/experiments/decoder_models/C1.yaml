@@ -1,24 +1,25 @@
 model:
-  name: "microsoft/Phi-3-mini-128k-instruct"
-  type: "phi3_classification_lora"
+  name: "microsoft/phi-4"
+  type: "phi4_classification_lora"
   num_labels: 6
-  output_dir: "./results/phi3_mini/C1"
-  logging_dir: "./logs/phi3_mini/C1"
-  best_model_dir: "./results/phi3_mini/C1/best_model"
+  output_dir: "./results/phi4-balanced/C1"
+  logging_dir: "./logs/phi4-balanced/C1"
+  best_model_dir: "./results/phi4-balanced/C1/best_model"
   lora_r: 256
-  lora_dropout: 0.15
+  lora_dropout: 0.05
   lora_alpha: 32
   lora_target_modules: "all-linear"
 
 dataset:
   grade_index: 0
 
-training_id: "phi3-mini-128k-C1"
+training_id: "phi4-balanced-C1"
 
 training_params:
-  weight_decay: 0.1
-  warmup_steps: 100
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  learning_rate: 5e-5
   train_batch_size: 2
   eval_batch_size: 2
-  gradient_accumulation_steps: 16
+  gradient_accumulation_steps: 8
   gradient_checkpointing: True
