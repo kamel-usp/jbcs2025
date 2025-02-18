@@ -31,7 +31,7 @@ def load_tokenizer(model_type: str, model_name: str, cache_dir: str):
     Returns:
         tokenizer: The loaded tokenizer.
     """
-    if model_type == ModelTypesEnum.PHI3_CLASSIFICATION_LORA.value:
+    if model_type == ModelTypesEnum.PHI35_CLASSIFICATION_LORA.value:
         return AutoTokenizer.from_pretrained(
             model_name,
             cache_dir=cache_dir,
@@ -82,7 +82,7 @@ def get_tokenize_function(
         tokenize_function_def = tokenize_function
 
     if model_type in [
-        ModelTypesEnum.PHI3_CLASSIFICATION_LORA.value,
+        ModelTypesEnum.PHI35_CLASSIFICATION_LORA.value,
         ModelTypesEnum.PHI4_CLASSIFICATION_LORA.value,
     ]:
         padding = "longest"
