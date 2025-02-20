@@ -50,7 +50,7 @@ def load_phi3_classification_lora(cfg: DictConfig, logger: Logger):
     logger.info(model.print_trainable_parameters())
     return model
 
-def load_big_models_classification_lora(cfg: DictConfig, logger: Logger):
+def load_slm_decoder_classification_lora(cfg: DictConfig, logger: Logger):
     model_cfg = cfg.experiments.model
     lora_config = LoraConfig(
         r=model_cfg.lora_r,

@@ -3,7 +3,7 @@ from logging import Logger
 from omegaconf import DictConfig
 
 from models.fine_tuning_models.classification_head import (
-    load_big_models_classification_lora,
+    load_slm_decoder_classification_lora,
     load_model_with_classification_head,
     load_phi3_classification_lora,
 )
@@ -23,7 +23,7 @@ class ModelFactory:
             ModelTypesEnum.PHI4_CLASSIFICATION_LORA.value,
             ModelTypesEnum.LLAMA31_CLASSIFICATION_LORA.value,
         ]:
-            model = load_big_models_classification_lora(experiment_config, logger)
+            model = load_slm_decoder_classification_lora(experiment_config, logger)
         if model is None:
             raise ValueError("You need to provide a valid Model Classification Type")
 
