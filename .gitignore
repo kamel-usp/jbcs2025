@@ -12,3 +12,4 @@ uv.lock
 
 #logs
 outputs/**/*
+.vscode/launch.json

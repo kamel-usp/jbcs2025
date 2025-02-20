@@ -44,7 +44,7 @@ def main(cfg: DictConfig):
     torch.use_deterministic_algorithms(True)
 
     logger.info("Starting the training process.")
-    trainer, tokenized_dataset = fine_tune_pipeline(cfg)
+    trainer, tokenized_dataset = fine_tune_pipeline(cfg, logger)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     evaluate_baseline = trainer.evaluate()
     save_evaluation_results_to_csv(

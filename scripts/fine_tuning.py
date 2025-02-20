@@ -1,18 +1,24 @@
 # train.py
 import sys
-from pathlib import Path
-import hydra
-from omegaconf import DictConfig
-from datasets import load_dataset
-from transformers import Trainer, TrainingArguments, EarlyStoppingCallback
-import transformers
-from preprocess import load_tokenizer, tokenize_dataset
 from functools import partial
+from logging import Logger
+from pathlib import Path
+
+import numpy as np
+import torch
+import transformers
+from datasets import load_dataset
+from omegaconf import DictConfig
+from preprocess import load_tokenizer, tokenize_dataset
+from sklearn.utils.class_weight import compute_class_weight
+from transformers import EarlyStoppingCallback, TrainingArguments
+
+from trainer.weighted_class_trainer import WeightedLossTrainer
 
 # Append the parent directory to sys.path using pathlib
 parent_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
-from models.fine_tuning_models.classification_head import load_model  # NOQA
+from models.fine_tuning_models.model_factory import ModelFactory  # NOQA
 from metrics.metrics import compute_metrics  # NOQA
 
 transformers.logging.set_verbosity_info()
@@ -21,8 +27,8 @@ EVALUATION_STRATEGY = "epoch"
 SAVE_TOTAL_LIMIT = 1
 REPORT_TO_LIST = ["tensorboard"]
 
-@hydra.main(version_base="1.1", config_path="../configs", config_name="config.yaml")
-def fine_tune_pipeline(experiment_config: DictConfig):
+
+def fine_tune_pipeline(experiment_config: DictConfig, logger: Logger):
     # Load the dataset
     dataset = load_dataset(
         experiment_config.dataset.name,
@@ -32,7 +38,9 @@ def fine_tune_pipeline(experiment_config: DictConfig):
 
     # Load the tokenizer
     tokenizer = load_tokenizer(
-        experiment_config.experiments.model.name, cache_dir=experiment_config.cache_dir
+        experiment_config.experiments.model.type,
+        experiment_config.experiments.model.name,
+        cache_dir=experiment_config.cache_dir,
     )
 
     # Tokenize the dataset
@@ -41,12 +49,18 @@ def fine_tune_pipeline(experiment_config: DictConfig):
         tokenizer,
         text_column="essay_text",
         grade_index=experiment_config.experiments.dataset.grade_index,
+        model_type=experiment_config.experiments.model.type,
+        logger=logger,
     )
 
     # Load the model
-    model = load_model(experiment_config)
-
-
+    model = ModelFactory.create_model(experiment_config, logger)
+    train_batch_size = experiment_config.experiments.training_params.train_batch_size
+    gradient_acc_steps = (
+        experiment_config.experiments.training_params.gradient_accumulation_steps
+    )
+    eval_batch_size = experiment_config.experiments.training_params.eval_batch_size
+    num_train_epochs = experiment_config.training_params.num_train_epochs
     # Set up training arguments
     training_args = TrainingArguments(
         seed=experiment_config.training_params.seed,
@@ -54,16 +68,18 @@ def fine_tune_pipeline(experiment_config: DictConfig):
         output_dir=str(Path(experiment_config.experiments.model.output_dir).resolve()),
         eval_strategy=EVALUATION_STRATEGY,
         # Fine Tuning Related
-        per_device_train_batch_size=experiment_config.training_params.train_batch_size,
-        per_device_eval_batch_size=experiment_config.training_params.eval_batch_size,
-        gradient_accumulation_steps=experiment_config.training_params.gradient_accumulation_steps,
-        gradient_checkpointing=experiment_config.training_params.gradient_checkpointing,
-        warmup_steps=experiment_config.experiments.training_params.warmup_steps,
-        learning_rate=experiment_config.training_params.learning_rate,
-        num_train_epochs=experiment_config.training_params.num_train_epochs,
+        per_device_train_batch_size=train_batch_size,
+        per_device_eval_batch_size=eval_batch_size,
+        gradient_accumulation_steps=gradient_acc_steps,
+        gradient_checkpointing=experiment_config.experiments.training_params.gradient_checkpointing,
+        warmup_ratio=experiment_config.experiments.training_params.warmup_ratio,
+        learning_rate=experiment_config.experiments.training_params.learning_rate,
+        num_train_epochs=num_train_epochs,
         weight_decay=experiment_config.experiments.training_params.weight_decay,
         # For logging and saving
-        logging_dir=str(Path(experiment_config.experiments.model.logging_dir).resolve()),
+        logging_dir=str(
+            Path(experiment_config.experiments.model.logging_dir).resolve()
+        ),
         logging_steps=experiment_config.training_params.logging_steps,
         log_level=LOGGING_LEVEL,
         save_strategy=EVALUATION_STRATEGY,
@@ -73,11 +89,23 @@ def fine_tune_pipeline(experiment_config: DictConfig):
         bf16=experiment_config.training_params.bf16,
         report_to=REPORT_TO_LIST,
     )
-
+    effective_batch_size = train_batch_size * gradient_acc_steps
+    steps_per_epoch = len(tokenized_dataset["train"]) // effective_batch_size
+    total_steps = steps_per_epoch * num_train_epochs
+    logger.info(
+        f"Total steps: {total_steps}. Number of warmup steps: {training_args.get_warmup_steps(total_steps)}"
+    )
     compute_metrics_partial = partial(compute_metrics, model=model)
+    train_labels = tokenized_dataset["train"]["label"]
+    class_weights = compute_class_weight(
+        class_weight="balanced",
+        classes=np.unique(train_labels),
+        y=np.array(train_labels),
+    )
+    class_weights_tensor = torch.tensor(class_weights, dtype=torch.float)
 
     # Initialize the Trainer
-    trainer = Trainer(
+    trainer = WeightedLossTrainer(
         model=model,
         train_dataset=tokenized_dataset["train"],
         eval_dataset=tokenized_dataset["validation"],
@@ -88,6 +116,7 @@ def fine_tune_pipeline(experiment_config: DictConfig):
             if tokenized_dataset["validation"]
             else []
         ),
+        class_weights=class_weights_tensor,
     )
     # Start training
     return trainer, tokenized_dataset
