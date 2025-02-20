@@ -5,13 +5,14 @@ from logging import Logger
 from pathlib import Path
 
 import numpy as np
+import torch
 import transformers
 from datasets import load_dataset
 from omegaconf import DictConfig
 from preprocess import load_tokenizer, tokenize_dataset
 from sklearn.utils.class_weight import compute_class_weight
-from transformers import EarlyStoppingCallback, Trainer, TrainingArguments
-import torch
+from transformers import EarlyStoppingCallback, TrainingArguments
+
 from trainer.weighted_class_trainer import WeightedLossTrainer
 
 # Append the parent directory to sys.path using pathlib
@@ -86,7 +87,7 @@ def fine_tune_pipeline(experiment_config: DictConfig, logger: Logger):
         load_best_model_at_end=True,
         metric_for_best_model=experiment_config.training_params.metric_for_best_model,
         bf16=experiment_config.training_params.bf16,
-        report_to=REPORT_TO_LIST
+        report_to=REPORT_TO_LIST,
     )
     effective_batch_size = train_batch_size * gradient_acc_steps
     steps_per_epoch = len(tokenized_dataset["train"]) // effective_batch_size
@@ -97,7 +98,9 @@ def fine_tune_pipeline(experiment_config: DictConfig, logger: Logger):
     compute_metrics_partial = partial(compute_metrics, model=model)
     train_labels = tokenized_dataset["train"]["label"]
     class_weights = compute_class_weight(
-        class_weight="balanced", classes=np.unique(train_labels), y=np.array(train_labels)
+        class_weight="balanced",
+        classes=np.unique(train_labels),
+        y=np.array(train_labels),
     )
     class_weights_tensor = torch.tensor(class_weights, dtype=torch.float)
 
