@@ -10,6 +10,7 @@ from tqdm.auto import tqdm
 from metrics.metrics import compute_metrics
 from models.api_models.open_ai_api import Competencia
 from models.fine_tuning_models.model_factory import ModelFactory
+from models.fine_tuning_models.model_types_enum import ModelTypesEnum
 from scripts.constants.prompts.sabia_model import (
     CONCEPT1_SYSTEM,
     CONCEPT2_SYSTEM,
@@ -31,15 +32,25 @@ async def get_completion_with_retry(
     retries = 0
     while True:
         try:
-            completion = await client.beta.chat.completions.parse(
-                model=model_name,
-                messages=messages,
-                response_format=Competencia,
-                max_tokens=experiment_config.experiments.model.max_tokens,
-                temperature=experiment_config.experiments.model.temperature,
-                seed=experiment_config.experiments.model.seed,
-            )
-            return completion.choices[0].message.parsed
+            if experiment_config.experiments.model.type in [ModelTypesEnum.CHATGPT_4O.value, ModelTypesEnum.MARITACA_SABIA.value]:
+                completion = await client.beta.chat.completions.parse(
+                    model=model_name,
+                    messages=messages,
+                    response_format=Competencia,
+                    max_tokens=experiment_config.experiments.model.max_tokens,
+                    temperature=experiment_config.experiments.model.temperature,
+                    seed=experiment_config.experiments.model.seed,
+                )
+                return completion.choices[0].message.parsed
+            if experiment_config.experiments.model.type in [ModelTypesEnum.DEEPSEEK_R1.value]:
+                completion = await client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    max_tokens=experiment_config.experiments.model.max_tokens
+                )
+                reasoning_conent = completion.choices[0].message.reasoning_conent
+                content = completion.choices[0].message.content
+                return content
         except openai.RateLimitError as e:
             if retries >= max_retries:
                 raise e

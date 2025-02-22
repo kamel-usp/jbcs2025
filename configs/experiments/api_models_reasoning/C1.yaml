@@ -1,0 +1,12 @@
+model:
+  name: "deepseek-reasoner"
+  type: "deepseek_r1"
+  api_key: "api_key"
+  api_url: "https://api.deepseek.com"
+  prompt_type: "zero-shot"
+  max_tokens: 8000
+
+dataset:
+  grade_index: 0
+
+training_id: "deepseek-r1-zero-shot"
