@@ -13,3 +13,4 @@ uv.lock
 #logs
 outputs/**/*
 .vscode/launch.json
+.api_keys.yaml
