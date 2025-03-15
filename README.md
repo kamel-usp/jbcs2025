@@ -36,6 +36,12 @@ pip install uv
      ```sh
      .venv\Scripts\activate
      ```
+4. **Install flash-attn package**
+
+Due to some order installation issue, `flash-attn` has to be installed separatedly. Then run **inside the environment**
+> uv pip install flash-attn --no-build-isolation
+
+
 ### Dependency Management
 - To add a new dependency, use:
   ```sh
