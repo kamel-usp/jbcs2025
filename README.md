@@ -39,7 +39,9 @@ pip install uv
 4. **Install flash-attn package**
 
 Due to some order installation issue, `flash-attn` has to be installed separatedly. Then run **inside the environment**
-> uv pip install flash-attn --no-build-isolation
+```sh
+uv pip install flash-attn --no-build-isolation
+```
 
 
 ### Dependency Management
