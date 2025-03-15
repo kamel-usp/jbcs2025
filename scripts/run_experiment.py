@@ -39,7 +39,6 @@ def fine_tune_process(cfg: DictConfig, logger: Logger):
         cfg.experiments.training_id,
         evaluate_baseline,
         current_time,
-        "baseline_evaluation",
     )
     trainer.train()
     evaluate_after_training = trainer.evaluate()
@@ -47,7 +46,6 @@ def fine_tune_process(cfg: DictConfig, logger: Logger):
         cfg.experiments.training_id,
         evaluate_after_training,
         current_time,
-        "evaluation_after_training",
     )
     logger.info("Training completed successfully.")
     logger.info("Running on Test")
@@ -56,7 +54,6 @@ def fine_tune_process(cfg: DictConfig, logger: Logger):
         cfg.experiments.training_id,
         evaluate_test,
         current_time,
-        "test_set_after_training",
     )
     trainer.save_model(cfg.experiments.model.best_model_dir)
 
