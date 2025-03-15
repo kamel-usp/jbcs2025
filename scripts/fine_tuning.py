@@ -95,7 +95,7 @@ def fine_tune_pipeline(experiment_config: DictConfig, logger: Logger):
     logger.info(
         f"Total steps: {total_steps}. Number of warmup steps: {training_args.get_warmup_steps(total_steps)}"
     )
-    compute_metrics_partial = partial(compute_metrics, model=model)
+    compute_metrics_partial = partial(compute_metrics, cfg=experiment_config)
     train_labels = tokenized_dataset["train"]["label"]
     class_weights = compute_class_weight(
         class_weight="balanced",

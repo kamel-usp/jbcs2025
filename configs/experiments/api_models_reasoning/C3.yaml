@@ -11,6 +11,6 @@ model:
   repetition_penalty: 1
 
 dataset:
-  grade_index: 0
+  grade_index: 2
 
-training_id: "deepseek-r1-zero-shot-C1"
+training_id: "deepseek-r1-zero-shot-C3"

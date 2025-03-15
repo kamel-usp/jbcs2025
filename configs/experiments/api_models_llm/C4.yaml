@@ -9,6 +9,6 @@ model:
   seed: 42
 
 dataset:
-  grade_index: 0
+  grade_index: 3
 
-training_id: "chatgpt-4o-zero-shot-C1"
+training_id: "chatgpt-4o-zero-shot-C4"
