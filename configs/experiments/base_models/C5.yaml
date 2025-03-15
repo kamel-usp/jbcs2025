@@ -1,0 +1,21 @@
+model:
+  name: "google-bert/bert-base-multilingual-cased"
+  type: "encoder_classification"
+  num_labels: 6
+  output_dir: "./results/mbert_base/C5"
+  logging_dir: "./logs/mbert_base/C5"
+  best_model_dir: "./results/mbert_base/C5/best_model"
+
+dataset:
+  grade_index: 4
+
+training_id: "mbert_base-C5" 
+
+training_params:
+  weight_decay: 0.01
+  warmup_steps: 10
+  learning_rate: 5e-5
+  train_batch_size: 16
+  eval_batch_size: 16
+  gradient_accumulation_steps: 1
+  gradient_checkpointing: False

@@ -1,0 +1,25 @@
+model:
+  name: "microsoft/phi-4"
+  type: "phi4_classification_lora"
+  num_labels: 6
+  output_dir: "./results/phi4-balanced/C5"
+  logging_dir: "./logs/phi4-balanced/C5"
+  best_model_dir: "./results/phi4-balanced/C5/best_model"
+  lora_r: 8
+  lora_dropout: 0.05
+  lora_alpha: 16
+  lora_target_modules: "all-linear"
+
+dataset:
+  grade_index: 4
+
+training_id: "phi4-balanced-C5"
+
+training_params:
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  learning_rate: 5e-5
+  train_batch_size: 1
+  eval_batch_size: 2
+  gradient_accumulation_steps: 16
+  gradient_checkpointing: True
