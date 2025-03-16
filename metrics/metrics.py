@@ -62,13 +62,13 @@ def compute_metrics(eval_pred, cfg):
     )
     rmse = root_mean_squared_error(all_true_labels, all_predictions)
     horizontal_discrepancy = enem_accuracy_score(all_true_labels, all_predictions)
-    macro_f1 = f1_score(all_true_labels, all_predictions, average='macro')
+    macro_f1 = f1_score(all_true_labels, all_predictions, average="macro")
     results = {
         "accuracy": float(accuracy),
         "RMSE": float(rmse),
         "QWK": float(qwk),
         "HDIV": float(1 - horizontal_discrepancy),
-        "Macro F1": macro_f1
+        "Macro_F1": macro_f1,
     }
     transformers_logger.info(results)
     return results

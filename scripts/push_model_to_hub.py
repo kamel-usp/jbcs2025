@@ -1,10 +1,13 @@
 import logging
-import os
+import shutil
+from pathlib import Path
 
 import hydra
 import pandas as pd
 from huggingface_hub import HfApi, login, upload_folder
 from omegaconf import DictConfig
+
+from models.fine_tuning_models.model_types_enum import ModelTypesEnum
 
 
 def create_model_card(cfg: DictConfig, model_dir: str, logger: logging.Logger):
@@ -17,13 +20,19 @@ def create_model_card(cfg: DictConfig, model_dir: str, logger: logging.Logger):
         inplace=True,
     )
     test_series = results.iloc[-1]
-    model_location = os.path.join(
-        model_dir, f"{cfg.experiments.model.output_dir}/best_model"
-    )
-    model_card_path = os.path.join(model_location, "README.md")
+    model_location = model_dir / cfg.experiments.model.output_dir / "best_model"
+    model_card_path = model_location / "README.md"
     logger.info(f"README location: {model_card_path}")
-    if not os.path.exists(model_card_path):
-        model_card_content = f"""
+    main_library = None
+    if cfg.experiments.model.type == ModelTypesEnum.ENCODER_CLASSIFICATION.value:
+        main_library = "transformers"
+    elif cfg.experiments.model.type in [
+        ModelTypesEnum.LLAMA31_CLASSIFICATION_LORA.value,
+        ModelTypesEnum.PHI35_CLASSIFICATION_LORA.value,
+        ModelTypesEnum.PHI4_CLASSIFICATION_LORA.value,
+    ]:
+        main_library = "peft"
+    model_card_content = f"""
 ---
 language:
 - pt
@@ -36,6 +45,7 @@ base_model: {cfg.experiments.model.name}
 metrics:
 - accuracy
 - qwk
+library_name: {main_library}
 model-index:
   - name: {cfg.experiments.training_id}
     results:
@@ -49,8 +59,8 @@ model-index:
           split: test
         metrics:
           - name: Macro F1
-            type: accuracy
-            value: {test_series["eval_Macro F1"]}
+            type: F1
+            value: {test_series["eval_Macro_F1"]}
           - name: QWK
             type: qwk
             value: {test_series["eval_QWK"]}
@@ -59,20 +69,18 @@ model-index:
 ## Results
 {test_series[["eval_accuracy", "eval_RMSE", "eval_QWK", "eval_Macro F1", "eval_HDIV"]].to_markdown()}
         """
-        try:
-            with open(model_card_path, "w") as f:
-                f.write(model_card_content)
-                logger.info("Model card (README.md) created successfully.")
-        except Exception as e:
-            logger.error(f"Failed to create model card: {e}")
-            raise e
-    else:
-        logger.info("Model card (README.md) already exists. Skipping creation.")
+    try:
+        with open(model_card_path, "w") as f:
+            f.write(model_card_content)
+            logger.info("Model card (README.md) created successfully.")
+    except Exception as error_message:
+        logger.error(f"Failed to create model card: {error_message}")
+        raise error_message
 
 
 def push_model_to_hf(cfg: DictConfig, logger: logging.Logger):
-    # Path where your fine-tuned model is saved.
-    model_dir = cfg.post_training_results.model_path
+    model_dir = Path(cfg.post_training_results.model_path)
+    best_dir = model_dir / cfg.experiments.model.output_dir / "best_model"
     # Organization name and repository naming
     org = "kamel-usp"
     repo_name = f"jbcs2025_{cfg.experiments.training_id}"
@@ -88,8 +96,17 @@ def push_model_to_hf(cfg: DictConfig, logger: logging.Logger):
         logger.error(f"Error creating repository '{full_repo_id}': {e}")
         raise e
 
-    # Optionally, create a model card if needed.
     create_model_card(cfg, model_dir, logger)
+
+    # Copy run_experiment.log from model_dir to best_dir so it can be uploaded as well.
+    source_log = model_dir / "run_experiment.log"
+    destination_log = best_dir / "run_experiment.log"
+    try:
+        shutil.copy(str(source_log), str(destination_log))
+        logger.info("run_experiment.log copied to best_dir successfully.")
+    except Exception as error_message:
+        logger.error(f"Failed to copy run_experiment.log to best_dir: {error_message}")
+        raise error_message
 
     # Upload the model folder to the repository using the HTTP-based upload_folder.
     try:
@@ -113,7 +130,7 @@ def push_model_to_hf(cfg: DictConfig, logger: logging.Logger):
         logger.info(
             f"Collection '{collection_name}' found in organization '{org}' under slug: {collection_slug}"
         )
-    except Exception as e:
+    except Exception as _:
         logger.info(
             f"Collection '{collection_name}' not found. Creating new collection."
         )
@@ -127,9 +144,11 @@ def push_model_to_hf(cfg: DictConfig, logger: logging.Logger):
         logger.info(
             f"Repository '{full_repo_id}' added to collection '{collection_name}'."
         )
-    except Exception as e:
-        logger.error(f"Error adding repository to collection '{collection_name}': {e}")
-        raise e
+    except Exception as error_message:
+        logger.error(
+            f"Error adding repository to collection '{collection_name}': {error_message}"
+        )
+        raise error_message
 
 
 @hydra.main(version_base="1.1", config_path="../configs/", config_name="config")
