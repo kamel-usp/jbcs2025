@@ -35,6 +35,8 @@ def fine_tune_process(cfg: DictConfig, logger: Logger):
     trainer, tokenized_dataset = fine_tune_pipeline(cfg, logger)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     evaluate_baseline = trainer.evaluate()
+    evaluate_baseline["epoch"] = -1
+    evaluate_baseline["reference"] = "validation_before_training"
     save_evaluation_results_to_csv(
         cfg.experiments.training_id,
         evaluate_baseline,
@@ -42,6 +44,7 @@ def fine_tune_process(cfg: DictConfig, logger: Logger):
     )
     trainer.train()
     evaluate_after_training = trainer.evaluate()
+    evaluate_after_training["reference"] = "validation_after_training"
     save_evaluation_results_to_csv(
         cfg.experiments.training_id,
         evaluate_after_training,
@@ -50,6 +53,7 @@ def fine_tune_process(cfg: DictConfig, logger: Logger):
     logger.info("Training completed successfully.")
     logger.info("Running on Test")
     evaluate_test = trainer.evaluate(tokenized_dataset["test"])
+    evaluate_test["reference"] = "test_results"
     save_evaluation_results_to_csv(
         cfg.experiments.training_id,
         evaluate_test,

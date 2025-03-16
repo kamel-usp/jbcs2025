@@ -3,7 +3,12 @@ import logging
 import os
 
 import numpy as np
-from sklearn.metrics import accuracy_score, cohen_kappa_score, root_mean_squared_error
+from sklearn.metrics import (
+    accuracy_score,
+    cohen_kappa_score,
+    f1_score,
+    root_mean_squared_error,
+)
 
 from models.fine_tuning_models.model_types_enum import ModelTypesEnum
 
@@ -57,11 +62,13 @@ def compute_metrics(eval_pred, cfg):
     )
     rmse = root_mean_squared_error(all_true_labels, all_predictions)
     horizontal_discrepancy = enem_accuracy_score(all_true_labels, all_predictions)
+    macro_f1 = f1_score(all_true_labels, all_predictions, average="macro")
     results = {
         "accuracy": float(accuracy),
         "RMSE": float(rmse),
         "QWK": float(qwk),
         "HDIV": float(1 - horizontal_discrepancy),
+        "Macro_F1": macro_f1,
     }
     transformers_logger.info(results)
     return results

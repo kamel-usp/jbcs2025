@@ -1,7 +1,6 @@
 defaults:
   - _self_
-  - experiments: slm_decoder_models/C2
-
+  - experiments: large_models/C5
 
 cache_dir: "/media/data/tmp"
 
@@ -15,3 +14,6 @@ training_params:
   logging_steps: 100
   metric_for_best_model: "QWK"
   bf16: True
+
+post_training_results:
+  model_path: /workspace/jbcs2025/outputs/2025-03-16/01-00-11

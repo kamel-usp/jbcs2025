@@ -79,10 +79,15 @@ def get_tokenize_function(
         padding = "max_length"
         truncation = True
         padding_side = "right"
+        max_length = 512
 
         def tokenize_function(examples: List[str]):
             return tokenizer(
-                examples[text_column], padding=padding, truncation=truncation, padding_side=padding_side
+                examples[text_column],
+                padding=padding,
+                truncation=truncation,
+                padding_side=padding_side,
+                max_length=max_length,
             )
 
         tokenize_function_def = tokenize_function
@@ -94,6 +99,7 @@ def get_tokenize_function(
         padding = "longest"
         truncation = False
         padding_side = "left"
+
         def tokenize_function(examples: List[str]):
             def _prompt_template(essay_example):
                 instructions_text = None
@@ -125,32 +131,43 @@ def get_tokenize_function(
                 return_tensors="pt",
                 padding=padding,
                 truncation=truncation,
-                padding_side=padding_side
+                padding_side=padding_side,
             )
 
         tokenize_function_def = tokenize_function
-    if model_type in [
-        ModelTypesEnum.LLAMA31_CLASSIFICATION_LORA.value
-    ]:
+    if model_type in [ModelTypesEnum.LLAMA31_CLASSIFICATION_LORA.value]:
         padding = "longest"
         truncation = False
         padding_side = "left"
+
         def tokenize_function(examples: List[str]):
             def _prompt_template(essay_example):
                 instructions_text = None
-                system_prefix = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>"
+                system_prefix = (
+                    "<|begin_of_text|><|start_header_id|>system<|end_header_id|>"
+                )
                 user_role = "<|start_header_id|>user<|end_header_id|>"
                 end_of_instruction = "<|eot_id|>"
                 if grade_index == 0:
-                    instructions_text = f"{system_prefix}\n\n{CONCEPT1_SYSTEM}{end_of_instruction}\n"
+                    instructions_text = (
+                        f"{system_prefix}\n\n{CONCEPT1_SYSTEM}{end_of_instruction}\n"
+                    )
                 elif grade_index == 1:
-                    instructions_text = f"{system_prefix}\n\n{CONCEPT2_SYSTEM}{end_of_instruction}\n"
+                    instructions_text = (
+                        f"{system_prefix}\n\n{CONCEPT2_SYSTEM}{end_of_instruction}\n"
+                    )
                 elif grade_index == 2:
-                    instructions_text = f"{system_prefix}\n\n{CONCEPT3_SYSTEM}{end_of_instruction}\n"
+                    instructions_text = (
+                        f"{system_prefix}\n\n{CONCEPT3_SYSTEM}{end_of_instruction}\n"
+                    )
                 elif grade_index == 3:
-                    instructions_text = f"{system_prefix}\n\n{CONCEPT4_SYSTEM}{end_of_instruction}\n"
+                    instructions_text = (
+                        f"{system_prefix}\n\n{CONCEPT4_SYSTEM}{end_of_instruction}\n"
+                    )
                 elif grade_index == 4:
-                    instructions_text = f"{system_prefix}\n\n{CONCEPT5_SYSTEM}{end_of_instruction}\n"
+                    instructions_text = (
+                        f"{system_prefix}\n\n{CONCEPT5_SYSTEM}{end_of_instruction}\n"
+                    )
                 user_role = f"{user_role}\n\nQual é a nota da redação a seguir?\n\n{essay_example}{end_of_instruction}\n"
                 assistant_role = "<|start_header_id|>assistant<|end_header_id|>"
                 instructions_text += user_role
@@ -168,8 +185,9 @@ def get_tokenize_function(
                 return_tensors="pt",
                 padding=padding,
                 truncation=truncation,
-                padding_side=padding_side
+                padding_side=padding_side,
             )
+
         tokenize_function_def = tokenize_function
     if tokenize_function_def is None:
         raise ValueError(
