@@ -1,5 +1,6 @@
 import logging
 import shutil
+import sys
 from pathlib import Path
 
 import hydra
@@ -7,7 +8,9 @@ import pandas as pd
 from huggingface_hub import HfApi, login, upload_folder
 from omegaconf import DictConfig
 
-from models.fine_tuning_models.model_types_enum import ModelTypesEnum
+parent_dir = Path(__file__).resolve().parent.parent
+sys.path.append(str(parent_dir))
+from models.fine_tuning_models.model_types_enum import ModelTypesEnum  # NOQA: E402
 
 
 def create_model_card(cfg: DictConfig, model_dir: str, logger: logging.Logger):
@@ -67,7 +70,7 @@ model-index:
 ---
 # Model ID: {cfg.experiments.training_id}
 ## Results
-{test_series[["eval_accuracy", "eval_RMSE", "eval_QWK", "eval_Macro F1", "eval_HDIV"]].to_markdown()}
+{test_series[["eval_accuracy", "eval_RMSE", "eval_QWK", "eval_Macro_F1", "eval_Micro_F1", "Weighted_F1", "eval_HDIV"]].to_markdown()}
         """
     try:
         with open(model_card_path, "w") as f:
