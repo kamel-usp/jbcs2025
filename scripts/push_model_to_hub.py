@@ -70,7 +70,7 @@ model-index:
 ---
 # Model ID: {cfg.experiments.training_id}
 ## Results
-{test_series[["eval_accuracy", "eval_RMSE", "eval_QWK", "eval_Macro_F1", "eval_Micro_F1", "Weighted_F1", "eval_HDIV"]].to_markdown()}
+{test_series[["eval_accuracy", "eval_RMSE", "eval_QWK", "eval_Macro_F1", "eval_Micro_F1", "eval_Weighted_F1", "eval_HDIV"]].to_markdown()}
         """
     try:
         with open(model_card_path, "w") as f:
