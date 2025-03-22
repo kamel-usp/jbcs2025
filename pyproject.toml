@@ -9,6 +9,7 @@ dependencies = [
     "hydra-core>=1.3.2",
     "ipython>=8.32.0",
     "jupyter>=1.1.1",
+    "matplotlib>=3.10.1",
     "openai>=1.63.2",
     "pandas>=2.2.3",
     "peft>=0.14.0",
