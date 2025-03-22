@@ -281,6 +281,7 @@ def api_inference_pipeline(
     if experiment_config.experiments.model.type in [ModelTypesEnum.DEEPSEEK_R1.value]:
         thinking_text = [result[0] for result in all_results]
         all_results = [result[1] for result in all_results]
+    logger.info("Inference Done. Storing results.")
     save_inference_results_jsonl(
         dataset_test=test_set,
         labels=labels,

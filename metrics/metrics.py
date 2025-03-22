@@ -7,6 +7,7 @@ from sklearn.metrics import (
     accuracy_score,
     cohen_kappa_score,
     f1_score,
+    precision_recall_fscore_support,
     root_mean_squared_error,
 )
 
@@ -65,6 +66,18 @@ def compute_metrics(eval_pred, cfg):
     macro_f1 = f1_score(all_true_labels, all_predictions, average="macro")
     micro_f1 = f1_score(all_true_labels, all_predictions, average="micro")
     weighted_f1 = f1_score(all_true_labels, all_predictions, average="weighted")
+    # Compute metrics per class; use zero_division=np.nan to propagate nans
+    precision, recall, f1, support = precision_recall_fscore_support(
+        all_true_labels, all_predictions, zero_division=np.nan, average=None
+    )
+
+    # Filter out the nan values and compute the average F1
+    # For example, we want ignore classes for which support = 0 (never appears in y_true)
+    # or for which scikit‐learn gave you a NaN for precision/recall.
+    # We **keep** ∗a class if (precision is not NaN) AND (recall is not NaN) AND (support > 0).
+    valid_mask = (~np.isnan(precision)) & (~np.isnan(recall)) & (support > 0)
+    valid_f1 = f1[valid_mask]
+    macro_f1_ignore_nan = np.mean(valid_f1)
     results = {
         "accuracy": float(accuracy),
         "RMSE": float(rmse),
@@ -72,7 +85,8 @@ def compute_metrics(eval_pred, cfg):
         "HDIV": float(1 - horizontal_discrepancy),
         "Macro_F1": macro_f1,
         "Micro_F1": micro_f1,
-        "Weighted_F1": weighted_f1
+        "Weighted_F1": weighted_f1,
+        "Macro_F1_(ignoring_nan)": macro_f1_ignore_nan,
     }
     transformers_logger.info(results)
     return results
