@@ -1,8 +1,8 @@
 model:
-  name: "gpt-4o-2024-11-20"
-  type: "openai_chatgpt_4o"
-  api_key: "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"
-  api_url: "https://api.openai.com/v1"
+  name: "maritaca_sabia_3"
+  type: "chave_nova"
+  api_key: "s116850825153030177980_52c4e6b13a7862c0"
+  api_url: "https://chat.maritaca.ai/api"
   prompt_type: "zero-shot"
   temperature: 0.1
   max_tokens: 10000
@@ -11,4 +11,4 @@ model:
 dataset:
   grade_index: 3
 
-training_id: "chatgpt-4o-zero-shot-C4"
+training_id: "sabia-3-teacher-prompt-zero-shot-C4"
