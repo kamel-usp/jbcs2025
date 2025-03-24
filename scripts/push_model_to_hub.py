@@ -35,6 +35,16 @@ def create_model_card(cfg: DictConfig, model_dir: str, logger: logging.Logger):
         ModelTypesEnum.PHI4_CLASSIFICATION_LORA.value,
     ]:
         main_library = "peft"
+    columns_to_use = [
+        "eval_accuracy",
+        "eval_RMSE",
+        "eval_QWK",
+        "eval_Macro_F1",
+        "eval_Macro_F1_(ignoring_nan)",
+        "eval_Weighted_F1",
+        "eval_Micro_F1",
+        "eval_HDIV",
+    ]
     model_card_content = f"""
 ---
 language:
@@ -61,16 +71,19 @@ model-index:
           config: JBCS2025
           split: test
         metrics:
-          - name: Macro F1
-            type: F1
-            value: {test_series["eval_Macro_F1"]}
+          - name: Macro F1 (ignoring nan)
+            type: f1
+            value: {test_series["eval_Macro_F1_(ignoring_nan)"]}
           - name: QWK
             type: qwk
             value: {test_series["eval_QWK"]}
+          - name: Weighted Macro F1
+            type: f1
+            value: {test_series["eval_Weighted_F1"]}
 ---
 # Model ID: {cfg.experiments.training_id}
 ## Results
-{test_series[["eval_accuracy", "eval_RMSE", "eval_QWK", "eval_Macro_F1", "eval_Micro_F1", "eval_Weighted_F1", "eval_HDIV"]].to_markdown()}
+{test_series[columns_to_use].to_markdown()}
         """
     try:
         with open(model_card_path, "w") as f:
