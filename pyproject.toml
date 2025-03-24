@@ -19,4 +19,5 @@ dependencies = [
     "tensorboardx>=2.6.2.2",
     "torch>=2.6.0",
     "transformers[torch]>=4.48.2",
+    "uv>=0.6.9",
 ]

@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - experiments: slm_decoder_models/C5
+  - experiments: slm_decoder_models/C1
 
 cache_dir: "/media/data/tmp"
 
@@ -16,4 +16,4 @@ training_params:
   bf16: True
 
 post_training_results:
-  model_path: /workspace/jbcs2025/outputs/2025-03-17/22-47-57
+  model_path: /workspace/jbcs2025/outputs/2025-03-23/23-16-55
