@@ -36,7 +36,7 @@ pip install uv
      ```sh
      .venv\Scripts\activate
      ```
-4. **Install flash-attn package**
+4. **Install flash-attn package (Only needed if you want to fine-tune/inference with Decoder LMs like Llama8B or Phi4/3.5)**
 
 Due to some order installation issue, `flash-attn` has to be installed separatedly. Then run **inside the environment**
 ```sh
