@@ -9,6 +9,7 @@ from sklearn.metrics import (
     f1_score,
     precision_recall_fscore_support,
     root_mean_squared_error,
+    confusion_matrix
 )
 
 from models.fine_tuning_models.model_types_enum import ModelTypesEnum
@@ -70,7 +71,7 @@ def compute_metrics(eval_pred, cfg):
     precision, recall, f1, support = precision_recall_fscore_support(
         all_true_labels, all_predictions, zero_division=np.nan, average=None
     )
-
+    
     # Filter out the nan values and compute the average F1
     # For example, we want ignore classes for which support = 0 (never appears in y_true)
     # or for which scikit‐learn gave you a NaN for precision/recall.
@@ -88,6 +89,17 @@ def compute_metrics(eval_pred, cfg):
         "Weighted_F1": weighted_f1,
         "Macro_F1_(ignoring_nan)": macro_f1_ignore_nan,
     }
+    cm = confusion_matrix(all_true_labels, all_predictions)
+    n_classes = cm.shape[0]
+    for i in range(n_classes):
+        TP = cm[i, i]
+        FN = np.sum(cm[i, :]) - TP
+        FP = np.sum(cm[:, i]) - TP
+        TN = np.sum(cm) - (TP + FP + FN)
+        results.update({f"TP_{i}": TP}) 
+        results.update({f"TN_{i}": TN}) 
+        results.update({f"FP_{i}": FP}) 
+        results.update({f"FN_{i}": FN}) 
     transformers_logger.info(results)
     return results
 
