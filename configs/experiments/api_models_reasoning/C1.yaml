@@ -1,14 +1,13 @@
 model:
-  name: "deepseek-ai/DeepSeek-R1"
+  name: "deepseek-reasoner"
   type: "deepseek_r1"
   api_key: "tgp_v1_gPq-iq4oV8mozpGvX1ysJqNxbOlDpWp9aBxU9w3LT8w"
-  api_url: "https://api.together.xyz/v1"
+    api_url: "https://api.deepseek.ai/v1"
   prompt_type: "zero-shot"
   max_tokens: null
   stop: ["<|end_of_sequence|>"]
-  temperature: 0.1
+  temperature: 0.6
   top_p: 0.95
-  repetition_penalty: 1
 
 dataset:
   grade_index: 0

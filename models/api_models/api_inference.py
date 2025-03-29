@@ -1,6 +1,8 @@
 import asyncio
 import json
 import re
+from collections import Counter
+from dataclasses import dataclass
 from logging import Logger
 from typing import Dict, List
 
@@ -27,6 +29,24 @@ from scripts.constants.prompts.sabia_model import (
 
 CONCURRENCY_LIMIT = 3
 EXPONENTIAL_BACKOFF_DELAY = 120
+
+
+@dataclass
+class AggregatedCompetencia:
+    pontuacao: int
+    justificativa: list
+
+
+@dataclass
+class ReasoningCompetencia:
+    thinking: str
+    competencia: Competencia
+
+
+@dataclass
+class AggregatedReasoningCompetencia:
+    thinking_list: list
+    aggregated_competencia: AggregatedCompetencia
 
 
 def parse_deepseek_response(api_response: str) -> tuple[str, Competencia]:
@@ -58,38 +78,66 @@ async def get_completion_with_retry(
     messages: list[dict],
     experiment_config,
     max_retries: int = 5,
-) -> list:
+    ensamble_model_call: int = 10,
+) -> AggregatedCompetencia | AggregatedReasoningCompetencia:
     retries = 0
     while True:
         try:
+            responses = []
             if experiment_config.experiments.model.type in [
                 ModelTypesEnum.CHATGPT_4O.value,
                 ModelTypesEnum.MARITACA_SABIA.value,
             ]:
-                completion = await client.beta.chat.completions.parse(
-                    model=model_name,
-                    messages=messages,
-                    response_format=Competencia,
-                    max_tokens=experiment_config.experiments.model.max_tokens,
-                    temperature=experiment_config.experiments.model.temperature,
-                    seed=experiment_config.experiments.model.seed,
+                for _ in range(ensamble_model_call):
+                    completion = await client.beta.chat.completions.parse(
+                        model=model_name,
+                        messages=messages,
+                        response_format=Competencia,
+                        max_tokens=experiment_config.experiments.model.max_tokens,
+                        temperature=experiment_config.experiments.model.temperature,
+                        seed=experiment_config.experiments.model.seed,
+                    )
+                    # Append the parsed response from the first choice.
+                    responses.append(completion.choices[0].message.parsed)
+                essay_scores = [resp.pontuacao for resp in responses]
+                explanations = [resp.justificativa for resp in responses]
+                if essay_scores:
+                    most_common_score = Counter(essay_scores).most_common(1)[0][0]
+                final_answer = AggregatedCompetencia(
+                    pontuacao=most_common_score, justificativa=explanations
                 )
-                return completion.choices[0].message.parsed
+                return final_answer
             if experiment_config.experiments.model.type in [
                 ModelTypesEnum.DEEPSEEK_R1.value
             ]:
-                completion = await client.chat.completions.create(
-                    model=model_name,
-                    messages=messages,
-                    max_tokens=experiment_config.experiments.model.max_tokens,
-                    top_p=experiment_config.experiments.model.top_p,
-                    stop=list(experiment_config.experiments.model.stop),
-                    temperature=experiment_config.experiments.model.temperature,
+                for _ in range(ensamble_model_call):
+                    completion = await client.chat.completions.create(
+                        model=model_name,
+                        messages=messages,
+                        max_tokens=experiment_config.experiments.model.max_tokens,
+                        top_p=experiment_config.experiments.model.top_p,
+                        stop=list(experiment_config.experiments.model.stop),
+                        temperature=experiment_config.experiments.model.temperature,
+                    )
+                    content = completion.choices[0].message.content
+                    think_text, evaluation = parse_deepseek_response(content)
+                    answer = ReasoningCompetencia(
+                        thinking=think_text, competencia=evaluation
+                    )
+                    responses.append(answer)
+                essay_scores = [resp.competencia.pontuacao for resp in responses]
+                explanations = [resp.competencia.justificativa for resp in responses]
+                thinking_list = [resp.thinking for resp in responses]
+                if essay_scores:
+                    most_common_score = Counter(essay_scores).most_common(1)[0][0]
+                final_answer = AggregatedReasoningCompetencia(
+                    thinking_list=thinking_list,
+                    aggregated_competencia=AggregatedCompetencia(
+                        pontuacao=most_common_score, justificativa=explanations
+                    ),
                 )
-                content = completion.choices[0].message.content
-                think_text, evaluation = parse_deepseek_response(content)
-                return think_text, evaluation
-        except (openai.RateLimitError, ValueError) as e:
+                return final_answer
+        except Exception as e:
             if retries >= max_retries:
                 raise e
             wait_time = (2**retries) * EXPONENTIAL_BACKOFF_DELAY  # Exponential backoff
@@ -104,7 +152,7 @@ async def get_completion(
     messages: list[dict],
     experiment_config: DictConfig,
     semaphore: asyncio.Semaphore,
-) -> list:
+) -> AggregatedReasoningCompetencia | AggregatedCompetencia:
     async with semaphore:
         return await get_completion_with_retry(
             client=client,
@@ -125,7 +173,7 @@ async def get_all_completions(
     processed_dataset: list[list[dict]],
     experiment_config,
     concurrency_limit: int = 5,
-) -> list:
+) -> List[AggregatedCompetencia | AggregatedReasoningCompetencia]:
     semaphore = asyncio.Semaphore(concurrency_limit)
 
     # Create tasks in the same order as processed_dataset
@@ -204,7 +252,7 @@ def save_inference_results_jsonl(
     labels: list,
     grade_index: int,
     thinking_text: list[str],
-    all_results: list,
+    all_results: List[AggregatedCompetencia | AggregatedReasoningCompetencia],
     logger: Logger,
     experiment_id: str,
     jsonl_filename: str = "inference_results.jsonl",
@@ -279,8 +327,8 @@ def api_inference_pipeline(
     )
     thinking_text = ["" for _ in all_results]  # empty reference to not break api
     if experiment_config.experiments.model.type in [ModelTypesEnum.DEEPSEEK_R1.value]:
-        thinking_text = [result[0] for result in all_results]
-        all_results = [result[1] for result in all_results]
+        thinking_text = [result.thinking_list for result in all_results]
+        all_results = [result.aggregated_competencia for result in all_results]
     logger.info("Inference Done. Storing results.")
     save_inference_results_jsonl(
         dataset_test=test_set,
