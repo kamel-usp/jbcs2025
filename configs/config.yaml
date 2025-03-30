@@ -2,7 +2,7 @@ defaults:
   - _self_
   - experiments: api_models_reasoning/C1
 
-cache_dir: "/media/data/tmp"
+cache_dir: "/tmp/"
 
 dataset:
   name: "kamel-usp/aes_enem_dataset"

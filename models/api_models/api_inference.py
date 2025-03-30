@@ -27,7 +27,7 @@ from scripts.constants.prompts.sabia_model import (
     CONCEPT5_SYSTEM,
 )
 
-CONCURRENCY_LIMIT = 3
+CONCURRENCY_LIMIT = 10
 EXPONENTIAL_BACKOFF_DELAY = 120
 
 
@@ -50,13 +50,6 @@ class AggregatedReasoningCompetencia:
 
 
 def parse_deepseek_response(api_response: str) -> tuple[str, Competencia]:
-    # Extract the text between <think> and </think> tags
-    think_pattern = r"<think>(.*?)</think>"
-    think_match = re.search(think_pattern, api_response, re.DOTALL)
-    if not think_match:
-        raise ValueError("Failed to find <think> tags in the response.")
-    think_text = think_match.group(1).strip()
-
     # Extract the JSON block marked by triple backticks with "json"
     json_pattern = r"```json\s*(\{.*?\})\s*```"
     json_match = re.search(json_pattern, api_response, re.DOTALL)
@@ -69,7 +62,7 @@ def parse_deepseek_response(api_response: str) -> tuple[str, Competencia]:
     except (json.JSONDecodeError, ValidationError) as e:
         raise ValueError("JSON parsing or validation failed") from e
 
-    return think_text, evaluation
+    return evaluation
 
 
 async def get_completion_with_retry(
@@ -114,13 +107,12 @@ async def get_completion_with_retry(
                     completion = await client.chat.completions.create(
                         model=model_name,
                         messages=messages,
-                        max_tokens=experiment_config.experiments.model.max_tokens,
-                        top_p=experiment_config.experiments.model.top_p,
                         stop=list(experiment_config.experiments.model.stop),
-                        temperature=experiment_config.experiments.model.temperature,
+                        stream=False
                     )
+                    think_text = completion.choices[0].message.reasoning_content
                     content = completion.choices[0].message.content
-                    think_text, evaluation = parse_deepseek_response(content)
+                    evaluation = parse_deepseek_response(content)
                     answer = ReasoningCompetencia(
                         thinking=think_text, competencia=evaluation
                     )
