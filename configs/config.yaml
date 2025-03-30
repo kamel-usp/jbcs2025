@@ -1,8 +1,8 @@
 defaults:
   - _self_
-  - experiments: slm_decoder_models/C3
+  - experiments: api_models_llm/C2
 
-cache_dir: "/media/data/tmp"
+cache_dir: "/media/data/tmp/"
 
 dataset:
   name: "kamel-usp/aes_enem_dataset"

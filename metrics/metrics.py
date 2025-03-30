@@ -1,4 +1,5 @@
 import csv
+from collections import OrderedDict
 import logging
 import os
 
@@ -118,14 +119,15 @@ def save_evaluation_results_to_csv(
     evaluation_results_with_timestamp = evaluation_results.copy()
     evaluation_results_with_timestamp["timestamp"] = timestamp
     evaluation_results_with_timestamp["id"] = training_id
+    ordered_dict = OrderedDict(evaluation_results_with_timestamp)
 
     # Determine if we need to write headers
     write_headers = not os.path.exists(file_path)
 
     with open(file_path, "a", newline="") as csvfile:
-        fieldnames = list(evaluation_results_with_timestamp.keys())
+        fieldnames = list(ordered_dict.keys())
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
         if write_headers:
             writer.writeheader()
-        writer.writerow(evaluation_results_with_timestamp)
+        writer.writerow(ordered_dict)

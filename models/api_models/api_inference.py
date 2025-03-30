@@ -1,6 +1,8 @@
 import asyncio
 import json
 import re
+from collections import Counter
+from dataclasses import dataclass
 from logging import Logger
 from typing import Dict, List
 
@@ -25,18 +27,30 @@ from scripts.constants.prompts.sabia_model import (
     CONCEPT5_SYSTEM,
 )
 
-CONCURRENCY_LIMIT = 3
+CONCURRENCY_LIMIT = 10
 EXPONENTIAL_BACKOFF_DELAY = 120
+NUMBER_REPETITION_EVAL = 3
+
+
+@dataclass
+class AggregatedCompetencia:
+    pontuacao: int
+    justificativa: list
+
+
+@dataclass
+class ReasoningCompetencia:
+    thinking: str
+    competencia: Competencia
+
+
+@dataclass
+class AggregatedReasoningCompetencia:
+    thinking_list: list
+    aggregated_competencia: AggregatedCompetencia
 
 
 def parse_deepseek_response(api_response: str) -> tuple[str, Competencia]:
-    # Extract the text between <think> and </think> tags
-    think_pattern = r"<think>(.*?)</think>"
-    think_match = re.search(think_pattern, api_response, re.DOTALL)
-    if not think_match:
-        raise ValueError("Failed to find <think> tags in the response.")
-    think_text = think_match.group(1).strip()
-
     # Extract the JSON block marked by triple backticks with "json"
     json_pattern = r"```json\s*(\{.*?\})\s*```"
     json_match = re.search(json_pattern, api_response, re.DOTALL)
@@ -49,7 +63,7 @@ def parse_deepseek_response(api_response: str) -> tuple[str, Competencia]:
     except (json.JSONDecodeError, ValidationError) as e:
         raise ValueError("JSON parsing or validation failed") from e
 
-    return think_text, evaluation
+    return evaluation
 
 
 async def get_completion_with_retry(
@@ -58,38 +72,65 @@ async def get_completion_with_retry(
     messages: list[dict],
     experiment_config,
     max_retries: int = 5,
-) -> list:
+    ensamble_model_call: int = 10,
+) -> AggregatedCompetencia | AggregatedReasoningCompetencia:
     retries = 0
     while True:
         try:
+            responses = []
             if experiment_config.experiments.model.type in [
                 ModelTypesEnum.CHATGPT_4O.value,
                 ModelTypesEnum.MARITACA_SABIA.value,
             ]:
-                completion = await client.beta.chat.completions.parse(
-                    model=model_name,
-                    messages=messages,
-                    response_format=Competencia,
-                    max_tokens=experiment_config.experiments.model.max_tokens,
-                    temperature=experiment_config.experiments.model.temperature,
-                    seed=experiment_config.experiments.model.seed,
+                for _ in range(ensamble_model_call):
+                    completion = await client.beta.chat.completions.parse(
+                        model=model_name,
+                        messages=messages,
+                        response_format=Competencia,
+                        max_tokens=experiment_config.experiments.model.max_tokens,
+                        temperature=experiment_config.experiments.model.temperature,
+                        seed=experiment_config.experiments.model.seed,
+                    )
+                    # Append the parsed response from the first choice.
+                    responses.append(completion.choices[0].message.parsed)
+                essay_scores = [resp.pontuacao for resp in responses]
+                explanations = [resp.justificativa for resp in responses]
+                if essay_scores:
+                    most_common_score = Counter(essay_scores).most_common(1)[0][0]
+                final_answer = AggregatedCompetencia(
+                    pontuacao=most_common_score, justificativa=explanations
                 )
-                return completion.choices[0].message.parsed
+                return final_answer
             if experiment_config.experiments.model.type in [
                 ModelTypesEnum.DEEPSEEK_R1.value
             ]:
-                completion = await client.chat.completions.create(
-                    model=model_name,
-                    messages=messages,
-                    max_tokens=experiment_config.experiments.model.max_tokens,
-                    top_p=experiment_config.experiments.model.top_p,
-                    stop=list(experiment_config.experiments.model.stop),
-                    temperature=experiment_config.experiments.model.temperature,
+                for _ in range(ensamble_model_call):
+                    completion = await client.chat.completions.create(
+                        model=model_name,
+                        messages=messages,
+                        stop=list(experiment_config.experiments.model.stop),
+                        stream=False,
+                    )
+                    think_text = completion.choices[0].message.reasoning_content
+                    content = completion.choices[0].message.content
+                    evaluation = parse_deepseek_response(content)
+                    answer = ReasoningCompetencia(
+                        thinking=think_text, competencia=evaluation
+                    )
+                    responses.append(answer)
+                essay_scores = [resp.competencia.pontuacao for resp in responses]
+                explanations = [resp.competencia.justificativa for resp in responses]
+                thinking_list = [resp.thinking for resp in responses]
+                if essay_scores:
+                    most_common_score = Counter(essay_scores).most_common(1)[0][0]
+                final_answer = AggregatedReasoningCompetencia(
+                    thinking_list=thinking_list,
+                    aggregated_competencia=AggregatedCompetencia(
+                        pontuacao=most_common_score, justificativa=explanations
+                    ),
                 )
-                content = completion.choices[0].message.content
-                think_text, evaluation = parse_deepseek_response(content)
-                return think_text, evaluation
-        except (openai.RateLimitError, ValueError) as e:
+                return final_answer
+        except Exception as e:
             if retries >= max_retries:
                 raise e
             wait_time = (2**retries) * EXPONENTIAL_BACKOFF_DELAY  # Exponential backoff
@@ -104,13 +145,14 @@ async def get_completion(
     messages: list[dict],
     experiment_config: DictConfig,
     semaphore: asyncio.Semaphore,
-) -> list:
+) -> AggregatedReasoningCompetencia | AggregatedCompetencia:
     async with semaphore:
         return await get_completion_with_retry(
             client=client,
             model_name=model_name,
             messages=messages,
             experiment_config=experiment_config,
+            ensamble_model_call=NUMBER_REPETITION_EVAL,
         )
 
 
@@ -125,7 +167,7 @@ async def get_all_completions(
     processed_dataset: list[list[dict]],
     experiment_config,
     concurrency_limit: int = 5,
-) -> list:
+) -> List[AggregatedCompetencia | AggregatedReasoningCompetencia]:
     semaphore = asyncio.Semaphore(concurrency_limit)
 
     # Create tasks in the same order as processed_dataset
@@ -149,14 +191,13 @@ async def get_all_completions(
     return ordered_results
 
 
-def _prompt_template(
-    essay_example: str, grade_index: int, experiment_config: DictConfig
-):
+def _prompt_template(example: dict, grade_index: int, experiment_config: DictConfig):
     instructions_text = None
     if experiment_config.experiments.model.type in [
         ModelTypesEnum.CHATGPT_4O.value,
         ModelTypesEnum.MARITACA_SABIA.value,
     ]:
+        user_text = {}
         if grade_index == 0:
             instructions_text = {"role": "system", "content": CONCEPT1_SYSTEM}
         elif grade_index == 1:
@@ -167,10 +208,21 @@ def _prompt_template(
             instructions_text = {"role": "system", "content": CONCEPT4_SYSTEM}
         elif grade_index == 4:
             instructions_text = {"role": "system", "content": CONCEPT5_SYSTEM}
-        user_text = {
-            "role": "user",
-            "content": f"Qual é a nota da redação a seguir?\n\n{essay_example}",
-        }
+        if experiment_config.experiments.model.use_essay_prompt is False:
+            user_text = {
+                "role": "user",
+                "content": f"Qual é a nota da redação a seguir?\n\n{example['essay_text']}",
+            }
+        elif experiment_config.experiments.model.use_essay_prompt is True:
+            user_text = {
+                "role": "user",
+                "content": (
+                    f"Considere os textos de apoio:\n\n{example['supporting_text']}.\n\n"
+                    f"Agora, o tema da redação é descrito a seguir:\n\n{example['prompt']}\n\n"
+                    f"Com base no tema e nos textos, qual é a nota da redação a seguir?\n\n"
+                    f"{example['essay_text']}"
+                ),
+            }
         return [instructions_text, user_text]
     if experiment_config.experiments.model.type in [ModelTypesEnum.DEEPSEEK_R1.value]:
         if grade_index == 0:
@@ -185,16 +237,18 @@ def _prompt_template(
             instructions_text = CONCEPT5_SYSTEM
         user_text = {
             "role": "user",
-            "content": f"{instructions_text}\n\nQual é a nota da redação a seguir?\n\n{essay_example}",
+            "content": f"{instructions_text}\n\nQual é a nota da redação a seguir?\n\n{example['essay_text']}",
         }
         return [user_text]
 
 
 def _prepare_instruction_template(
-    examples: List[str], grade_index: int, experiment_config: DictConfig
+    test_set,
+    grade_index: int,
+    experiment_config: DictConfig,
 ):
     result = []
-    for example in examples:
+    for example in test_set:
         result.append(_prompt_template(example, grade_index, experiment_config))
     return result
 
@@ -204,7 +258,7 @@ def save_inference_results_jsonl(
     labels: list,
     grade_index: int,
     thinking_text: list[str],
-    all_results: list,
+    all_results: List[AggregatedCompetencia | AggregatedReasoningCompetencia],
     logger: Logger,
     experiment_id: str,
     jsonl_filename: str = "inference_results.jsonl",
@@ -262,10 +316,9 @@ def api_inference_pipeline(
     )
     test_set = dataset["test"]
     grade_index = experiment_config.experiments.dataset.grade_index
-    test_essays = test_set["essay_text"]
     labels = test_set.map(lambda x: {"labels": x["grades"][grade_index]})["labels"]
     processed_dataset = _prepare_instruction_template(
-        test_essays, grade_index, experiment_config
+        test_set, grade_index, experiment_config
     )
     model = ModelFactory.create_model(experiment_config, logger)
     logger.info(f"Starting inference on {experiment_config.experiments.model.name}")
@@ -279,8 +332,8 @@ def api_inference_pipeline(
     )
     thinking_text = ["" for _ in all_results]  # empty reference to not break api
     if experiment_config.experiments.model.type in [ModelTypesEnum.DEEPSEEK_R1.value]:
-        thinking_text = [result[0] for result in all_results]
-        all_results = [result[1] for result in all_results]
+        thinking_text = [result.thinking_list for result in all_results]
+        all_results = [result.aggregated_competencia for result in all_results]
     logger.info("Inference Done. Storing results.")
     save_inference_results_jsonl(
         dataset_test=test_set,
