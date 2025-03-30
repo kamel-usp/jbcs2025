@@ -29,7 +29,7 @@ from scripts.constants.prompts.sabia_model import (
 
 CONCURRENCY_LIMIT = 10
 EXPONENTIAL_BACKOFF_DELAY = 120
-
+NUMBER_REPETITION_EVAL = 5
 
 @dataclass
 class AggregatedCompetencia:
@@ -151,6 +151,7 @@ async def get_completion(
             model_name=model_name,
             messages=messages,
             experiment_config=experiment_config,
+            ensamble_model_call=NUMBER_REPETITION_EVAL
         )
 
 
