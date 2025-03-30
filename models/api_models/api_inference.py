@@ -29,7 +29,8 @@ from scripts.constants.prompts.sabia_model import (
 
 CONCURRENCY_LIMIT = 10
 EXPONENTIAL_BACKOFF_DELAY = 120
-NUMBER_REPETITION_EVAL = 5
+NUMBER_REPETITION_EVAL = 3
+
 
 @dataclass
 class AggregatedCompetencia:
@@ -108,7 +109,7 @@ async def get_completion_with_retry(
                         model=model_name,
                         messages=messages,
                         stop=list(experiment_config.experiments.model.stop),
-                        stream=False
+                        stream=False,
                     )
                     think_text = completion.choices[0].message.reasoning_content
                     content = completion.choices[0].message.content
@@ -151,7 +152,7 @@ async def get_completion(
             model_name=model_name,
             messages=messages,
             experiment_config=experiment_config,
-            ensamble_model_call=NUMBER_REPETITION_EVAL
+            ensamble_model_call=NUMBER_REPETITION_EVAL,
         )
 
 
@@ -190,14 +191,13 @@ async def get_all_completions(
     return ordered_results
 
 
-def _prompt_template(
-    essay_example: str, grade_index: int, experiment_config: DictConfig
-):
+def _prompt_template(example: dict, grade_index: int, experiment_config: DictConfig):
     instructions_text = None
     if experiment_config.experiments.model.type in [
         ModelTypesEnum.CHATGPT_4O.value,
         ModelTypesEnum.MARITACA_SABIA.value,
     ]:
+        user_text = {}
         if grade_index == 0:
             instructions_text = {"role": "system", "content": CONCEPT1_SYSTEM}
         elif grade_index == 1:
@@ -208,10 +208,21 @@ def _prompt_template(
             instructions_text = {"role": "system", "content": CONCEPT4_SYSTEM}
         elif grade_index == 4:
             instructions_text = {"role": "system", "content": CONCEPT5_SYSTEM}
-        user_text = {
-            "role": "user",
-            "content": f"Qual é a nota da redação a seguir?\n\n{essay_example}",
-        }
+        if experiment_config.experiments.model.use_essay_prompt is False:
+            user_text = {
+                "role": "user",
+                "content": f"Qual é a nota da redação a seguir?\n\n{example['essay_text']}",
+            }
+        elif experiment_config.experiments.model.use_essay_prompt is True:
+            user_text = {
+                "role": "user",
+                "content": (
+                    f"Considere os textos de apoio:\n\n{example['supporting_text']}.\n\n"
+                    f"Agora, o tema da redação é descrito a seguir:\n\n{example['prompt']}\n\n"
+                    f"Com base no tema e nos textos, qual é a nota da redação a seguir?\n\n"
+                    f"{example['essay_text']}"
+                ),
+            }
         return [instructions_text, user_text]
     if experiment_config.experiments.model.type in [ModelTypesEnum.DEEPSEEK_R1.value]:
         if grade_index == 0:
@@ -226,16 +237,18 @@ def _prompt_template(
             instructions_text = CONCEPT5_SYSTEM
         user_text = {
             "role": "user",
-            "content": f"{instructions_text}\n\nQual é a nota da redação a seguir?\n\n{essay_example}",
+            "content": f"{instructions_text}\n\nQual é a nota da redação a seguir?\n\n{example['essay_text']}",
         }
         return [user_text]
 
 
 def _prepare_instruction_template(
-    examples: List[str], grade_index: int, experiment_config: DictConfig
+    test_set,
+    grade_index: int,
+    experiment_config: DictConfig,
 ):
     result = []
-    for example in examples:
+    for example in test_set:
         result.append(_prompt_template(example, grade_index, experiment_config))
     return result
 
@@ -303,10 +316,9 @@ def api_inference_pipeline(
     )
     test_set = dataset["test"]
     grade_index = experiment_config.experiments.dataset.grade_index
-    test_essays = test_set["essay_text"]
     labels = test_set.map(lambda x: {"labels": x["grades"][grade_index]})["labels"]
     processed_dataset = _prepare_instruction_template(
-        test_essays, grade_index, experiment_config
+        test_set, grade_index, experiment_config
     )
     model = ModelFactory.create_model(experiment_config, logger)
     logger.info(f"Starting inference on {experiment_config.experiments.model.name}")
