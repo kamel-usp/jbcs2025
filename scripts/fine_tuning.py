@@ -47,9 +47,7 @@ def fine_tune_pipeline(experiment_config: DictConfig, logger: Logger):
     tokenized_dataset = tokenize_dataset(
         dataset,
         tokenizer,
-        text_column="essay_text",
-        grade_index=experiment_config.experiments.dataset.grade_index,
-        model_type=experiment_config.experiments.model.type,
+        experiment_config=experiment_config,
         logger=logger,
     )
 

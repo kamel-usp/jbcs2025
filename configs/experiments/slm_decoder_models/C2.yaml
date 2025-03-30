@@ -1,6 +1,7 @@
 model:
   name: "microsoft/phi-4"
   type: "phi4_classification_lora"
+  use_essay_prompt: true
   num_labels: 6
   output_dir: "./results/phi4-balanced/C2"
   logging_dir: "./logs/phi4-balanced/C2"

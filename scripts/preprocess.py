@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List
 
 from datasets import DatasetDict
+from omegaconf import DictConfig
 from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
 
 # Append the parent directory to sys.path using pathlib
@@ -66,12 +67,13 @@ def process_grades(example, grade_index: int):
 
 
 def get_tokenize_function(
-    model_type: str,
+    experiment_config: DictConfig,
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
-    text_column: str,
     grade_index: int,
     logger: Logger,
 ):
+    model_type = experiment_config.experiments.model.type
+    use_essay_prompt = experiment_config.experiments.model.use_essay_prompt
     padding = None
     truncation = None
     tokenize_function_def = None
@@ -81,9 +83,9 @@ def get_tokenize_function(
         padding_side = "right"
         max_length = 512
 
-        def tokenize_function(examples: List[str]):
+        def tokenize_function(examples: dict):
             return tokenizer(
-                examples[text_column],
+                examples["essay_text"],
                 padding=padding,
                 truncation=truncation,
                 padding_side=padding_side,
@@ -100,7 +102,7 @@ def get_tokenize_function(
         truncation = False
         padding_side = "left"
 
-        def tokenize_function(examples: List[str]):
+        def tokenize_function(examples: dict):
             def _prompt_template(essay_example):
                 instructions_text = None
                 if grade_index == 0:
@@ -113,21 +115,25 @@ def get_tokenize_function(
                     instructions_text = f"<|system|>\n{CONCEPT4_SYSTEM}<|end|>\n"
                 elif grade_index == 4:
                     instructions_text = f"<|system|>\n{CONCEPT5_SYSTEM}<|end|>\n"
-
-                user_role = f"<|user|>Qual é a nota da redação a seguir?\n\n{essay_example}<|end|>\n"
+                if use_essay_prompt is False:
+                    user_role = f"<|user|>Qual é a nota da redação a seguir?\n\n{essay_example['essay_text']}<|end|>\n"
+                elif use_essay_prompt is True:
+                    user_role = f"<|user|>Considere os textos de apoio:\n\n{essay_example['supporting_text']}.\n\n"
+                    user_role += f"Agora, o tema da redação é drescrito a seguir:\n\n{essay_example['prompt']}\n\n"
+                    user_role += f"Qual é a nota da redação a seguir?\n\n{essay_example['essay_text']}<|end|>\n"
                 assistant_role = "<|assistant|>"
                 instructions_text += user_role
                 instructions_text += assistant_role
                 return instructions_text
 
-            def _prepare_instruction_template(examples: List[str]):
+            def _prepare_instruction_template(examples):
                 result = []
                 for example in examples:
                     result.append(_prompt_template(example))
                 return result
 
             return tokenizer(
-                _prepare_instruction_template(examples[text_column]),
+                _prepare_instruction_template(examples["essay_text"]),
                 return_tensors="pt",
                 padding=padding,
                 truncation=truncation,
@@ -140,7 +146,7 @@ def get_tokenize_function(
         truncation = False
         padding_side = "left"
 
-        def tokenize_function(examples: List[str]):
+        def tokenize_function(examples: dict):
             def _prompt_template(essay_example):
                 instructions_text = None
                 system_prefix = (
@@ -168,7 +174,12 @@ def get_tokenize_function(
                     instructions_text = (
                         f"{system_prefix}\n\n{CONCEPT5_SYSTEM}{end_of_instruction}\n"
                     )
-                user_role = f"{user_role}\n\nQual é a nota da redação a seguir?\n\n{essay_example}{end_of_instruction}\n"
+                if use_essay_prompt is False:
+                    user_role = f"{user_role}\n\nQual é a nota da redação a seguir?\n\n{essay_example['essay_text']}{end_of_instruction}\n"
+                elif use_essay_prompt is True:
+                    user_role = f"{user_role}\n\nConsidere os textos de apoio:\n\n{essay_example['supporting_text']}.\n\n"
+                    user_role += f"Agora, o tema da redação é drescrito a seguir:\n\n{essay_example['prompt']}\n\n"
+                    user_role += f"Qual é a nota da redação a seguir?\n\n{essay_example['essay_text']}{end_of_instruction}\n"
                 assistant_role = "<|start_header_id|>assistant<|end_header_id|>"
                 instructions_text += user_role
                 instructions_text += assistant_role
@@ -181,7 +192,7 @@ def get_tokenize_function(
                 return result
 
             return tokenizer(
-                _prepare_instruction_template(examples[text_column]),
+                _prepare_instruction_template(examples["essay_text"]),
                 return_tensors="pt",
                 padding=padding,
                 truncation=truncation,
@@ -202,9 +213,7 @@ def get_tokenize_function(
 def tokenize_dataset(
     dataset: DatasetDict,
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
-    text_column: str,
-    grade_index: int,
-    model_type: str,
+    experiment_config: DictConfig,
     logger: Logger,
 ):
     """
@@ -213,16 +222,16 @@ def tokenize_dataset(
     Args:
         dataset (DatasetDict): The dataset to tokenize.
         tokenizer: The tokenizer to use.
-        text_column (str): The name of the text column in the dataset.
-        grade_index (int): The index of the grade to extract.
+        experiment_config: hydra configs
 
     Returns:
         DatasetDict: The tokenized dataset.
     """
+    grade_index = experiment_config.experiments.dataset.grade_index
     # Process the 'grades' column
     dataset = dataset.map(lambda x: process_grades(x, grade_index))
     tokenize_function = get_tokenize_function(
-        model_type, tokenizer, text_column, grade_index, logger
+        experiment_config, tokenizer, grade_index, logger
     )
     tokenized_dataset = dataset.map(tokenize_function, batched=True)
     return tokenized_dataset
