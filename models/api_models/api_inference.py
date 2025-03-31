@@ -27,15 +27,25 @@ from scripts.constants.prompts.sabia_model import (
     CONCEPT5_SYSTEM,
 )
 
-CONCURRENCY_LIMIT = 10
+CONCURRENCY_LIMIT = 1
 EXPONENTIAL_BACKOFF_DELAY = 120
-NUMBER_REPETITION_EVAL = 3
+NUMBER_REPETITION_EVAL = 1
 
 
 @dataclass
 class AggregatedCompetencia:
-    pontuacao: int
+    abordagem: list
+    aglomerado: list
+    outro_tipo_textual: list
+    partes_embrionárias: list
+    conclusão_incompleta: list
+    cópias_dos_motivadores: list
+    repertório_baseado_motivadores: list
+    repertório_legitimado: list
+    repertório_pertinente: list
+    repertório_produtivo: list
     justificativa: list
+    pontuacao: int
 
 
 @dataclass
@@ -284,17 +294,40 @@ def save_inference_results_jsonl(
 
     rows = []
     for idx, essay in enumerate(test_essays):
-        row = {
-            "id": ids[idx],
-            "id_prompt": id_prompts[idx],
-            "essay_text": essay,
-            "label": labels[idx],
-            "grade_index": grade_index,
-            "reference": reference[idx],
-            "thinking_text": thinking_text[idx],
-            "justificativa": all_results[idx].justificativa,
-            "pontuacao": all_results[idx].pontuacao,
-        }
+        if grade_index == 1:
+            row = {
+                "id": ids[idx],
+                "id_prompt": id_prompts[idx],
+                "essay_text": essay,
+                "label": labels[idx],
+                "grade_index": grade_index,
+                "reference": reference[idx],
+                "thinking_text": thinking_text[idx],
+                "justificativa": all_results[idx].justificativa,
+                "abordagem": all_results[idx].abordagem, 
+                "aglomerado": all_results[idx].aglomerado,
+                "outro_tipo_textual": all_results[idx].outro_tipo_textual,
+                "partes_embrionárias": all_results[idx].partes_embrionárias, 
+                "conclusão_incompleta": all_results[idx].conclusão_incompleta,
+                "cópias_dos_motivadores": all_results[idx].cópias_dos_motivadores, 
+                "repertório_baseado_motivadores": all_results[idx].repertório_baseado_motivadores,
+                "repertório_legitimado": all_results[idx].repertório_legitimado, 
+                "repertório_pertinente": all_results[idx].repertório_pertinente, 
+                "repertório_produtivo": all_results[idx].repertório_produtivo,
+                "pontuacao": all_results[idx].pontuacao,
+            }
+        else:
+            row = {
+                "id": ids[idx],
+                "id_prompt": id_prompts[idx],
+                "essay_text": essay,
+                "label": labels[idx],
+                "grade_index": grade_index,
+                "reference": reference[idx],
+                "thinking_text": thinking_text[idx],
+                "justificativa": all_results[idx].justificativa,
+                "pontuacao": all_results[idx].pontuacao,
+            }
         rows.append(row)
 
     # Write each row as a JSON object on a new line
