@@ -1,7 +1,6 @@
 import sys
 from logging import Logger
 from pathlib import Path
-from typing import List
 
 from datasets import DatasetDict
 from omegaconf import DictConfig
@@ -103,7 +102,7 @@ def get_tokenize_function(
         padding_side = "left"
 
         def tokenize_function(examples: dict):
-            def _prompt_template(essay_example):
+            def _prompt_template(essay_text, supporting_text, prompt):
                 instructions_text = None
                 if grade_index == 0:
                     instructions_text = f"<|system|>\n{CONCEPT1_SYSTEM}<|end|>\n"
@@ -116,11 +115,11 @@ def get_tokenize_function(
                 elif grade_index == 4:
                     instructions_text = f"<|system|>\n{CONCEPT5_SYSTEM}<|end|>\n"
                 if use_essay_prompt is False:
-                    user_role = f"<|user|>Qual é a nota da redação a seguir?\n\n{essay_example['essay_text']}<|end|>\n"
+                    user_role = f"<|user|>Qual é a nota da redação a seguir?\n\n{essay_text}<|end|>\n"
                 elif use_essay_prompt is True:
-                    user_role = f"<|user|>Considere os textos de apoio:\n\n{essay_example['supporting_text']}.\n\n"
-                    user_role += f"Agora, o tema da redação é drescrito a seguir:\n\n{essay_example['prompt']}\n\n"
-                    user_role += f"Qual é a nota da redação a seguir?\n\n{essay_example['essay_text']}<|end|>\n"
+                    user_role = f"<|user|>Considere os textos de apoio:\n\n{supporting_text}.\n\n"
+                    user_role += f"Agora, o tema da redação é descrito a seguir:\n\n{prompt}\n\n"
+                    user_role += f"Com base no tema e nos textos, qual é a nota da redação a seguir?\n\n{essay_text}<|end|>\n"
                 assistant_role = "<|assistant|>"
                 instructions_text += user_role
                 instructions_text += assistant_role
@@ -128,12 +127,16 @@ def get_tokenize_function(
 
             def _prepare_instruction_template(examples):
                 result = []
-                for example in examples:
-                    result.append(_prompt_template(example))
+                for essay_text, supporting_text, prompt in zip(
+                    examples["essay_text"],
+                    examples["supporting_text"],
+                    examples["prompt"],
+                ):
+                    result.append(_prompt_template(essay_text, supporting_text, prompt))
                 return result
 
             return tokenizer(
-                _prepare_instruction_template(examples["essay_text"]),
+                _prepare_instruction_template(examples),
                 return_tensors="pt",
                 padding=padding,
                 truncation=truncation,
@@ -147,7 +150,7 @@ def get_tokenize_function(
         padding_side = "left"
 
         def tokenize_function(examples: dict):
-            def _prompt_template(essay_example):
+            def _prompt_template(essay_text, supporting_text, prompt):
                 instructions_text = None
                 system_prefix = (
                     "<|begin_of_text|><|start_header_id|>system<|end_header_id|>"
@@ -175,24 +178,28 @@ def get_tokenize_function(
                         f"{system_prefix}\n\n{CONCEPT5_SYSTEM}{end_of_instruction}\n"
                     )
                 if use_essay_prompt is False:
-                    user_role = f"{user_role}\n\nQual é a nota da redação a seguir?\n\n{essay_example['essay_text']}{end_of_instruction}\n"
+                    user_role = f"{user_role}\n\nQual é a nota da redação a seguir?\n\n{essay_text}{end_of_instruction}\n"
                 elif use_essay_prompt is True:
-                    user_role = f"{user_role}\n\nConsidere os textos de apoio:\n\n{essay_example['supporting_text']}.\n\n"
-                    user_role += f"Agora, o tema da redação é drescrito a seguir:\n\n{essay_example['prompt']}\n\n"
-                    user_role += f"Qual é a nota da redação a seguir?\n\n{essay_example['essay_text']}{end_of_instruction}\n"
+                    user_role = f"{user_role}\n\nConsidere os textos de apoio:\n\n{supporting_text}.\n\n"
+                    user_role += f"Agora, o tema da redação é descrito a seguir:\n\n{prompt}\n\n"
+                    user_role += f"Com base no tema e nos textos, qual é a nota da redação a seguir?\n\n{essay_text}{end_of_instruction}\n"
                 assistant_role = "<|start_header_id|>assistant<|end_header_id|>"
                 instructions_text += user_role
                 instructions_text += assistant_role
                 return instructions_text
 
-            def _prepare_instruction_template(examples: List[str]):
+            def _prepare_instruction_template(examples):
                 result = []
-                for example in examples:
-                    result.append(_prompt_template(example))
+                for essay_text, supporting_text, prompt in zip(
+                    examples["essay_text"],
+                    examples["supporting_text"],
+                    examples["prompt"],
+                ):
+                    result.append(_prompt_template(essay_text, supporting_text, prompt))
                 return result
 
             return tokenizer(
-                _prepare_instruction_template(examples["essay_text"]),
+                _prepare_instruction_template(examples),
                 return_tensors="pt",
                 padding=padding,
                 truncation=truncation,
