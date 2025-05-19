@@ -29,9 +29,7 @@ from preprocess import load_tokenizer, tokenize_dataset  # NOQA
 from trainer.weighted_class_trainer import WeightedLossTrainer  # NOQA
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("inference_experiment.log"), logging.StreamHandler()],
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
