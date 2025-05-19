@@ -18,6 +18,11 @@ from transformers import set_seed
 # Append the parent directory to sys.path using pathlib
 parent_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
+
+# Register OmegaConf resolvers BEFORE hydra.main is called
+from utils.secrets.secret_manager import register_resolvers  # NOQA
+register_resolvers()
+
 from metrics.metrics import save_evaluation_results_to_csv  # NOQA
 from models.fine_tuning_models.model_types_enum import ModelTypesEnum  # NOQA
 from models.api_models.api_inference import api_inference_pipeline  # NOQA
