@@ -30,7 +30,7 @@ def create_openai_client(cfg: DictConfig, logger: logging.Logger) -> openai.Asyn
     """
     logger.info(f"Setting up model {cfg.experiments.model.name} through OpenAI Client.")
     model_type = cfg.experiments.model.type
-    api_key = cfg.experiments.model.api_key or get_api_key(model_type)
+    api_key = get_api_key(model_type)
     client = openai.AsyncOpenAI(
         api_key=api_key,
         base_url=cfg.experiments.model.api_url,

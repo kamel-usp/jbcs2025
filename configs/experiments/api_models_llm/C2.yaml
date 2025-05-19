@@ -1,13 +1,13 @@
 model:
   name: "sabia-3" #valid models: gpt-4o-2024-11-20, sabia-3
   type: "maritaca_sabia_3" #valid models: maritaca_sabia_3, openai_chatgpt_4o
-  api_key: "<your_api_key>"
   api_url: "https://chat.maritaca.ai/api" #valid models: https://api.openai.com/v1, https://chat.maritaca.ai/api
   prompt_type: "zero-shot"
-  use_essay_prompt: true
+  use_essay_prompt: false 
   temperature: 0.1
   max_tokens: 15000
   seed: 42
+  number_repetition_eval: 10
 
 dataset:
   grade_index: 1

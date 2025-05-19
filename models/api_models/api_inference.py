@@ -29,7 +29,6 @@ from scripts.constants.prompts.sabia_model import (
 
 CONCURRENCY_LIMIT = 10
 EXPONENTIAL_BACKOFF_DELAY = 120
-NUMBER_REPETITION_EVAL = 3
 
 
 @dataclass
@@ -70,9 +69,9 @@ async def get_completion_with_retry(
     client: openai.AsyncOpenAI,
     model_name: str,
     messages: list[dict],
+    number_of_calls_per_model: int,
     experiment_config,
     max_retries: int = 5,
-    ensamble_model_call: int = 10,
 ) -> AggregatedCompetencia | AggregatedReasoningCompetencia:
     retries = 0
     while True:
@@ -82,7 +81,7 @@ async def get_completion_with_retry(
                 ModelTypesEnum.CHATGPT_4O.value,
                 ModelTypesEnum.MARITACA_SABIA.value,
             ]:
-                for _ in range(ensamble_model_call):
+                for _ in range(number_of_calls_per_model):
                     completion = await client.beta.chat.completions.parse(
                         model=model_name,
                         messages=messages,
@@ -104,7 +103,7 @@ async def get_completion_with_retry(
             if experiment_config.experiments.model.type in [
                 ModelTypesEnum.DEEPSEEK_R1.value
             ]:
-                for _ in range(ensamble_model_call):
+                for _ in range(number_of_calls_per_model):
                     completion = await client.chat.completions.create(
                         model=model_name,
                         messages=messages,
@@ -144,6 +143,7 @@ async def get_completion(
     model_name: str,
     messages: list[dict],
     experiment_config: DictConfig,
+    number_repetition_eval: int,
     semaphore: asyncio.Semaphore,
 ) -> AggregatedReasoningCompetencia | AggregatedCompetencia:
     async with semaphore:
@@ -152,7 +152,7 @@ async def get_completion(
             model_name=model_name,
             messages=messages,
             experiment_config=experiment_config,
-            ensamble_model_call=NUMBER_REPETITION_EVAL,
+            number_of_calls_per_model=number_repetition_eval,
         )
 
 
@@ -166,6 +166,7 @@ async def get_all_completions(
     model: openai.AsyncOpenAI,
     processed_dataset: list[list[dict]],
     experiment_config,
+    number_repetition_eval,
     concurrency_limit: int = 5,
 ) -> List[AggregatedCompetencia | AggregatedReasoningCompetencia]:
     semaphore = asyncio.Semaphore(concurrency_limit)
@@ -178,6 +179,7 @@ async def get_all_completions(
             messages=current_prompt,
             experiment_config=experiment_config,
             semaphore=semaphore,
+            number_repetition_eval=number_repetition_eval,
         )
         for current_prompt in processed_dataset
     ]
@@ -322,12 +324,16 @@ def api_inference_pipeline(
     )
     model = ModelFactory.create_model(experiment_config, logger)
     logger.info(f"Starting inference on {experiment_config.experiments.model.name}")
+    logger.info(
+        f"We will run inference {experiment_config.experiments.model.number_repetition_eval} times per row"
+    )
     all_results = asyncio.run(
         get_all_completions(
             model,
             processed_dataset,
             experiment_config,
             concurrency_limit=CONCURRENCY_LIMIT,
+            number_repetition_eval=experiment_config.experiments.model.number_repetition_eval,
         )
     )
     thinking_text = ["" for _ in all_results]  # empty reference to not break api

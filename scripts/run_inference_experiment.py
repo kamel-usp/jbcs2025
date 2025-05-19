@@ -181,9 +181,8 @@ def run_inference(cfg: DictConfig, logger: Logger):
         raise ValueError(f"Unsupported model type: {cfg.experiments.model.type}")
 
     # Save metrics to CSV
-    metrics["reference"] = "inference_results"
     save_evaluation_results_to_csv(
-        cfg.experiments.inference_id,
+        cfg.experiments.training_id,
         metrics,
         current_time,
     )
