@@ -5,11 +5,9 @@ model:
   prompt_type: "zero-shot"
   use_essay_prompt: false 
   temperature: 0.1
-  max_tokens: 15000
+  max_tokens: 20000
   seed: 42
   number_repetition_eval: 10
 
 dataset:
   grade_index: 1
-
-training_id: "sabia-3-zero-shot-C2"

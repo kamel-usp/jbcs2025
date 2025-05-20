@@ -21,6 +21,7 @@ sys.path.append(str(parent_dir))
 
 # Register OmegaConf resolvers BEFORE hydra.main is called
 from utils.secrets.secret_manager import register_resolvers  # NOQA
+
 register_resolvers()
 
 from metrics.metrics import save_evaluation_results_to_csv  # NOQA
@@ -36,14 +37,31 @@ transformers_logger.propagate = True
 logger = logging.getLogger(__name__)
 
 
+def get_experiment_id(experiment_config: DictConfig) -> str:
+    model_name = experiment_config.experiments.model.name
+    model_type = None
+    if hasattr(experiment_config.experiments.model, "prompt_type"):
+        model_type = experiment_config.experiments.model.prompt_type
+    elif hasattr(experiment_config.experiments.model, "type"):
+        model_type = experiment_config.experiments.model.type
+        if "/" in model_name:
+            model_name = model_name.split("/")[-1]
+    experiment_id = (
+        f"{model_name}-{model_type}-"
+        f"C{experiment_config.experiments.dataset.grade_index + 1}"
+    )
+    return experiment_id
+
+
 def fine_tune_process(cfg: DictConfig, logger: Logger):
     trainer, tokenized_dataset = fine_tune_pipeline(cfg, logger)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     evaluate_baseline = trainer.evaluate()
     evaluate_baseline["epoch"] = -1
     evaluate_baseline["reference"] = "validation_before_training"
+    experiment_id = get_experiment_id(cfg)
     save_evaluation_results_to_csv(
-        cfg.experiments.training_id,
+        experiment_id,
         evaluate_baseline,
         current_time,
     )
@@ -51,7 +69,7 @@ def fine_tune_process(cfg: DictConfig, logger: Logger):
     evaluate_after_training = trainer.evaluate()
     evaluate_after_training["reference"] = "validation_after_training"
     save_evaluation_results_to_csv(
-        cfg.experiments.training_id,
+        experiment_id,
         evaluate_after_training,
         current_time,
     )
@@ -60,7 +78,7 @@ def fine_tune_process(cfg: DictConfig, logger: Logger):
     evaluate_test = trainer.evaluate(tokenized_dataset["test"])
     evaluate_test["reference"] = "test_results"
     save_evaluation_results_to_csv(
-        cfg.experiments.training_id,
+        experiment_id,
         evaluate_test,
         current_time,
     )
@@ -70,8 +88,9 @@ def fine_tune_process(cfg: DictConfig, logger: Logger):
 def api_calling_pipeline(cfg: DictConfig, logger: Logger):
     api_results = api_inference_pipeline(cfg, logger)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    experiment_id = get_experiment_id(cfg)
     save_evaluation_results_to_csv(
-        cfg.experiments.training_id,
+        experiment_id,
         api_results,
         current_time,
     )

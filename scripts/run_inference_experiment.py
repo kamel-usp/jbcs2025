@@ -5,6 +5,9 @@ from datetime import datetime
 from logging import Logger
 from pathlib import Path
 from typing import Dict, List
+import os
+import time
+import shutil
 
 import hydra
 import torch
@@ -26,6 +29,7 @@ from models.fine_tuning_models.model_factory import ModelFactory  # NOQA
 from models.fine_tuning_models.model_types_enum import ModelTypesEnum  # NOQA
 from models.api_models.api_inference import api_inference_pipeline  # NOQA
 from preprocess import load_tokenizer, tokenize_dataset  # NOQA
+from run_experiment import get_experiment_id  # NOQA
 from trainer.weighted_class_trainer import WeightedLossTrainer  # NOQA
 
 logging.basicConfig(
@@ -181,8 +185,9 @@ def run_inference(cfg: DictConfig, logger: Logger):
         raise ValueError(f"Unsupported model type: {cfg.experiments.model.type}")
 
     # Save metrics to CSV
+    experiment_id = get_experiment_id(cfg)
     save_evaluation_results_to_csv(
-        cfg.experiments.training_id,
+        experiment_id,
         metrics,
         current_time,
     )
@@ -198,6 +203,7 @@ def main(cfg: DictConfig):
     """
     Main entry point for inference.
     """
+    original_output_dir = os.getcwd()
     logger.info("Starting inference experiment")
     logger.info(OmegaConf.to_yaml(cfg))
 
@@ -215,6 +221,54 @@ def main(cfg: DictConfig):
 
     logger.info("Inference experiment completed")
 
+    # We need to close all file handlers to release the log files
+    # This is crucial for Windows where open files prevent directory renaming
+    handlers = list(logger.handlers)
+    for handler in handlers:
+        handler.close()
+        logger.removeHandler(handler)
+    
+    # Also close the root logger's handlers
+    root_logger = logging.getLogger()
+    for handler in list(root_logger.handlers):
+        handler.close()
+        root_logger.removeHandler(handler)
+    
+    # On Windows, we need a different approach since the file system 
+    # sometimes keeps handles open even after closing loggers
+    experiment_id = get_experiment_id(cfg)
+    parent_dir = os.path.dirname(original_output_dir)
+    new_dir_name = os.path.join(parent_dir, experiment_id)
+    
+    # Check if the target directory already exists
+    if os.path.exists(new_dir_name):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        new_dir_name = f"{new_dir_name}_{timestamp}"
+    
+    try:
+        # Instead of moving, copy files to the new location
+        os.makedirs(new_dir_name, exist_ok=True)
+        
+        # Copy files one by one, skipping any that might be locked
+        for item in os.listdir(original_output_dir):
+            src_path = os.path.join(original_output_dir, item)
+            dst_path = os.path.join(new_dir_name, item)
+            
+            try:
+                if os.path.isfile(src_path):
+                    shutil.copy2(src_path, dst_path)
+                elif os.path.isdir(src_path):
+                    shutil.copytree(src_path, dst_path)
+            except Exception as e:
+                print(f"Failed to copy {item}: {e}")
+        
+        print(f"Files copied to: {new_dir_name}")
+        
+        # We don't try to delete the original directory since it might still be locked
+        print(f"Original directory remains at: {original_output_dir}")
+        
+    except Exception as e:
+        print(f"Failed to create output directory: {e}")
 
 if __name__ == "__main__":
     main()

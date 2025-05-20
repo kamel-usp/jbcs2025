@@ -12,5 +12,3 @@ model:
 
 dataset:
   grade_index: 3
-
-training_id: "deepseek-r1-zero-shot-C4"

@@ -311,6 +311,9 @@ def save_inference_results_jsonl(
 def api_inference_pipeline(
     experiment_config: DictConfig, logger: Logger
 ) -> Dict[str, float]:
+    from scripts.run_experiment import get_experiment_id  # avoid circular import
+
+    experiment_id = get_experiment_id(experiment_config)
     dataset = load_dataset(
         experiment_config.dataset.name,
         experiment_config.dataset.split,
@@ -348,7 +351,7 @@ def api_inference_pipeline(
         thinking_text=thinking_text,
         all_results=all_results,
         logger=logger,
-        experiment_id=experiment_config.experiments.training_id,
+        experiment_id=experiment_id,
     )
     predictions = [row.pontuacao for row in all_results]
     return compute_metrics((predictions, labels), experiment_config)

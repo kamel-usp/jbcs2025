@@ -13,8 +13,6 @@ model:
 dataset:
   grade_index: 3
 
-training_id: "phi35-balanced-C4"
-
 training_params:
   weight_decay: 0.01
   warmup_ratio: 0.1

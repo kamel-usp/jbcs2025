@@ -8,5 +8,3 @@ model:
 
 dataset:
   grade_index: 0
-
-training_id: "deepseek-r1-zero-shot-C1"

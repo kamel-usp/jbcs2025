@@ -9,8 +9,6 @@ model:
 dataset:
   grade_index: 4
 
-training_id: "mbert_base-C5" 
-
 training_params:
   weight_decay: 0.01
   warmup_ratio: 0.1
