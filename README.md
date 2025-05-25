@@ -45,7 +45,7 @@ uv pip install flash-attn --no-build-isolation
 
 ### Managing API Keys and Secrets
 
-This project uses environment variables for managing API keys (such as `open AI or Maritaca AI`) and other sensitive information.
+This project uses environment variables for managing API keys (such as `OpenAI or Maritaca AI`) and other sensitive information.
 
   1. Create a .env file in the project root:
   ```sh
