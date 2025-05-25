@@ -1,18 +1,20 @@
 import json
 import logging
+import os
+import shutil
 import sys
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
 from typing import Dict, List
-import os
-import shutil
 
 import hydra
+import numpy as np
 import torch
-from datasets import load_dataset, Dataset
+from datasets import Dataset, load_dataset
 from omegaconf import DictConfig, OmegaConf
-from transformers import set_seed
+from sklearn.utils.class_weight import compute_class_weight
+from transformers import TrainingArguments, set_seed
 
 # Append the parent directory to sys.path using pathlib
 parent_dir = Path(__file__).resolve().parent.parent
@@ -90,12 +92,9 @@ def load_model_from_hub(cfg: DictConfig, logger: Logger):
     """
     Load a pretrained model from Hugging Face Hub.
     """
-    logger.info(f"Loading model from: {cfg.inference.model_id}")
+    logger.info(f"Loading model from: {cfg.experiments.model.name}")
 
-    # Create the model using ModelFactory which should handle HF Hub loading
-    model = ModelFactory.create_model(
-        cfg, logger, pretrained_model_name_or_path=cfg.inference.model_id
-    )
+    model = ModelFactory.create_model(cfg, logger)
 
     return model
 
@@ -114,7 +113,7 @@ def hf_model_inference(cfg: DictConfig, logger: Logger) -> Dict[str, float]:
     # Load tokenizer
     tokenizer = load_tokenizer(
         cfg.experiments.model.type,
-        cfg.experiments.model.name,
+        cfg.experiments.tokenizer.name,
         cache_dir=cfg.cache_dir,
     )
 
@@ -132,28 +131,44 @@ def hf_model_inference(cfg: DictConfig, logger: Logger) -> Dict[str, float]:
     # Load the model from Hub
     model = load_model_from_hub(cfg, logger)
 
+    train_labels = tokenized_dataset["train"]["label"]
+    class_weights = compute_class_weight(
+        class_weight="balanced",
+        classes=np.unique(train_labels),
+        y=np.array(train_labels),
+    )
+    class_weights_tensor = torch.tensor(class_weights, dtype=torch.float)
+    training_args = TrainingArguments(
+        seed=cfg.training_params.seed,
+        data_seed=cfg.training_params.seed,
+        output_dir=os.getcwd(),
+        per_device_eval_batch_size=cfg.experiments.training_params.eval_batch_size,
+        bf16=cfg.training_params.bf16,
+    )
+
     # Create trainer
     trainer = WeightedLossTrainer(
         model=model,
-        args=None,  # We're only doing inference, no training args needed
+        args=training_args,
+        class_weights=class_weights_tensor,
     )
 
     # Run inference
     logger.info("Running inference on test dataset")
     test_results = trainer.predict(tokenized_dataset["test"])
-    predictions = test_results.predictions.argmax(-1)
+    logits = test_results.predictions
     labels = test_results.label_ids
 
     # Calculate metrics
-    metrics = compute_metrics((predictions, labels), cfg)
+    metrics = compute_metrics((logits, labels), cfg)
 
     # Save inference results
     save_model_predictions_jsonl(
         dataset_test=dataset["test"],
-        predictions=predictions,
+        predictions=np.argmax(logits, axis=1),
         labels=labels,
         grade_index=grade_index,
-        experiment_id=cfg.experiments.inference_id,
+        experiment_id=get_experiment_id(cfg),
     )
 
     return metrics
@@ -207,11 +222,11 @@ def main(cfg: DictConfig):
     logger.info(OmegaConf.to_yaml(cfg))
 
     # Set random seed for reproducibility
-    set_seed(cfg.inference.seed)
-    torch.manual_seed(cfg.inference.seed)
+    set_seed(cfg.training_params.seed)
+    torch.manual_seed(cfg.training_params.seed)
 
     if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(cfg.inference.seed)
+        torch.cuda.manual_seed_all(cfg.training_params.seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
@@ -226,33 +241,33 @@ def main(cfg: DictConfig):
     for handler in handlers:
         handler.close()
         logger.removeHandler(handler)
-    
+
     # Also close the root logger's handlers
     root_logger = logging.getLogger()
     for handler in list(root_logger.handlers):
         handler.close()
         root_logger.removeHandler(handler)
-    
-    # On Windows, we need a different approach since the file system 
+
+    # On Windows, we need a different approach since the file system
     # sometimes keeps handles open even after closing loggers
     experiment_id = get_experiment_id(cfg)
     parent_dir = os.path.dirname(original_output_dir)
     new_dir_name = os.path.join(parent_dir, experiment_id)
-    
+
     # Check if the target directory already exists
     if os.path.exists(new_dir_name):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         new_dir_name = f"{new_dir_name}_{timestamp}"
-    
+
     try:
         # Instead of moving, copy files to the new location
         os.makedirs(new_dir_name, exist_ok=True)
-        
+
         # Copy files one by one, skipping any that might be locked
         for item in os.listdir(original_output_dir):
             src_path = os.path.join(original_output_dir, item)
             dst_path = os.path.join(new_dir_name, item)
-            
+
             try:
                 if os.path.isfile(src_path):
                     shutil.copy2(src_path, dst_path)
@@ -260,14 +275,15 @@ def main(cfg: DictConfig):
                     shutil.copytree(src_path, dst_path)
             except Exception as e:
                 print(f"Failed to copy {item}: {e}")
-        
+
         print(f"Files copied to: {new_dir_name}")
-        
+
         # We don't try to delete the original directory since it might still be locked
         print(f"Original directory remains at: {original_output_dir}")
-        
+
     except Exception as e:
         print(f"Failed to create output directory: {e}")
+
 
 if __name__ == "__main__":
     main()
