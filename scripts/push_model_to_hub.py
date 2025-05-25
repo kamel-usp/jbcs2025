@@ -8,6 +8,8 @@ import pandas as pd
 from huggingface_hub import HfApi, login, upload_folder
 from omegaconf import DictConfig
 
+from scripts.run_experiment import get_experiment_id
+
 parent_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 from models.fine_tuning_models.model_types_enum import ModelTypesEnum  # NOQA: E402
@@ -27,6 +29,7 @@ def create_model_card(cfg: DictConfig, model_dir: str, logger: logging.Logger):
     model_card_path = model_location / "README.md"
     logger.info(f"README location: {model_card_path}")
     main_library = None
+    experiment_id = get_experiment_id(cfg)
     if cfg.experiments.model.type == ModelTypesEnum.ENCODER_CLASSIFICATION.value:
         main_library = "transformers"
     elif cfg.experiments.model.type in [
@@ -60,7 +63,7 @@ metrics:
 - qwk
 library_name: {main_library}
 model-index:
-  - name: {cfg.experiments.training_id}
+  - name: {experiment_id}
     results:
       - task:
           type: text-classification
@@ -81,7 +84,7 @@ model-index:
             type: f1
             value: {test_series["eval_Weighted_F1"]}
 ---
-# Model ID: {cfg.experiments.training_id}
+# Model ID: {experiment_id}
 ## Results
 {test_series[columns_to_use].to_markdown()}
         """
@@ -97,9 +100,10 @@ model-index:
 def push_model_to_hf(cfg: DictConfig, logger: logging.Logger):
     model_dir = Path(cfg.post_training_results.model_path)
     best_dir = model_dir / cfg.experiments.model.output_dir / "best_model"
+    experiment_id = get_experiment_id(cfg)
     # Organization name and repository naming
     org = "kamel-usp"
-    repo_name = f"jbcs2025_{cfg.experiments.training_id}"
+    repo_name = f"jbcs2025_{experiment_id}"
     full_repo_id = f"{org}/{repo_name}"
 
     api = HfApi()

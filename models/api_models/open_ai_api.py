@@ -5,6 +5,8 @@ import openai
 from omegaconf import DictConfig
 from pydantic import BaseModel
 
+from utils.secrets.secret_manager import get_api_key
+
 
 class Competencia(BaseModel):
     """
@@ -26,9 +28,11 @@ def create_openai_client(cfg: DictConfig, logger: logging.Logger) -> openai.Asyn
     Returns:
         openai.AsyncOpenAI: An instance of the asynchronous OpenAI client.
     """
-    logger.info(f"Setting up model {cfg.experiments.model.name} through OpenAI API")
+    logger.info(f"Setting up model {cfg.experiments.model.name} through OpenAI Client.")
+    model_type = cfg.experiments.model.type
+    api_key = get_api_key(model_type)
     client = openai.AsyncOpenAI(
-        api_key=cfg.experiments.model.api_key,
+        api_key=api_key,
         base_url=cfg.experiments.model.api_url,
     )
     logger.info("OpenAI client initialized successfully.")

@@ -29,7 +29,6 @@ from scripts.constants.prompts.sabia_model import (
 
 CONCURRENCY_LIMIT = 10
 EXPONENTIAL_BACKOFF_DELAY = 120
-NUMBER_REPETITION_EVAL = 3
 
 
 @dataclass
@@ -70,11 +69,11 @@ async def get_completion_with_retry(
     client: openai.AsyncOpenAI,
     model_name: str,
     messages: list[dict],
+    number_of_calls_per_model: int,
     experiment_config,
     max_retries: int = 5,
-    ensamble_model_call: int = 10,
 ) -> AggregatedCompetencia | AggregatedReasoningCompetencia:
-    retries = 0
+    api_retries = 0
     while True:
         try:
             responses = []
@@ -82,7 +81,7 @@ async def get_completion_with_retry(
                 ModelTypesEnum.CHATGPT_4O.value,
                 ModelTypesEnum.MARITACA_SABIA.value,
             ]:
-                for _ in range(ensamble_model_call):
+                for _ in range(number_of_calls_per_model):
                     completion = await client.beta.chat.completions.parse(
                         model=model_name,
                         messages=messages,
@@ -104,20 +103,42 @@ async def get_completion_with_retry(
             if experiment_config.experiments.model.type in [
                 ModelTypesEnum.DEEPSEEK_R1.value
             ]:
-                for _ in range(ensamble_model_call):
-                    completion = await client.chat.completions.create(
-                        model=model_name,
-                        messages=messages,
-                        stop=list(experiment_config.experiments.model.stop),
-                        stream=False,
-                    )
-                    think_text = completion.choices[0].message.reasoning_content
-                    content = completion.choices[0].message.content
-                    evaluation = parse_deepseek_response(content)
-                    answer = ReasoningCompetencia(
-                        thinking=think_text, competencia=evaluation
-                    )
-                    responses.append(answer)
+                successful_responses = 0
+                parsing_retries = 0
+                while successful_responses < number_of_calls_per_model:
+                    try:
+                        completion = await client.chat.completions.create(
+                            model=model_name,
+                            messages=messages,
+                            stop=list(experiment_config.experiments.model.stop),
+                            stream=False,
+                        )
+                        think_text = completion.choices[0].message.reasoning_content
+                        content = completion.choices[0].message.content
+
+                        # This might raise ValueError
+                        evaluation = parse_deepseek_response(content)
+
+                        # If we get here, parsing was successful
+                        answer = ReasoningCompetencia(
+                            thinking=think_text, competencia=evaluation
+                        )
+                        responses.append(answer)
+                        successful_responses += 1
+                        parsing_retries = 0  # Reset parsing retries after success
+
+                    except ValueError as parse_error:
+                        # For JSON parsing errors, use a separate retry counter
+                        parsing_retries += 1
+                        wait_time = (2**parsing_retries) * EXPONENTIAL_BACKOFF_DELAY
+                        print(
+                            f"JSON parsing error: {parse_error}. "
+                            f"Parsing retry #{parsing_retries} in {wait_time} seconds..."
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                # Only reach this point when we have all required responses
                 essay_scores = [resp.competencia.pontuacao for resp in responses]
                 explanations = [resp.competencia.justificativa for resp in responses]
                 thinking_list = [resp.thinking for resp in responses]
@@ -131,12 +152,15 @@ async def get_completion_with_retry(
                 )
                 return final_answer
         except Exception as e:
-            if retries >= max_retries:
+            # For non-parsing errors (API issues, network problems, etc.)
+            if api_retries >= max_retries:
                 raise e
-            wait_time = (2**retries) * EXPONENTIAL_BACKOFF_DELAY  # Exponential backoff
-            print(f"Rate limit exceeded, retrying in {wait_time} seconds...")
+            api_retries += 1
+            wait_time = (2**api_retries) * EXPONENTIAL_BACKOFF_DELAY
+            print(
+                f"API error occurred: {str(e)}. API retry #{api_retries}/{max_retries} in {wait_time} seconds..."
+            )
             await asyncio.sleep(wait_time)
-            retries += 1
 
 
 async def get_completion(
@@ -144,6 +168,7 @@ async def get_completion(
     model_name: str,
     messages: list[dict],
     experiment_config: DictConfig,
+    number_repetition_eval: int,
     semaphore: asyncio.Semaphore,
 ) -> AggregatedReasoningCompetencia | AggregatedCompetencia:
     async with semaphore:
@@ -152,7 +177,7 @@ async def get_completion(
             model_name=model_name,
             messages=messages,
             experiment_config=experiment_config,
-            ensamble_model_call=NUMBER_REPETITION_EVAL,
+            number_of_calls_per_model=number_repetition_eval,
         )
 
 
@@ -166,6 +191,7 @@ async def get_all_completions(
     model: openai.AsyncOpenAI,
     processed_dataset: list[list[dict]],
     experiment_config,
+    number_repetition_eval,
     concurrency_limit: int = 5,
 ) -> List[AggregatedCompetencia | AggregatedReasoningCompetencia]:
     semaphore = asyncio.Semaphore(concurrency_limit)
@@ -178,6 +204,7 @@ async def get_all_completions(
             messages=current_prompt,
             experiment_config=experiment_config,
             semaphore=semaphore,
+            number_repetition_eval=number_repetition_eval,
         )
         for current_prompt in processed_dataset
     ]
@@ -309,6 +336,9 @@ def save_inference_results_jsonl(
 def api_inference_pipeline(
     experiment_config: DictConfig, logger: Logger
 ) -> Dict[str, float]:
+    from scripts.run_experiment import get_experiment_id  # avoid circular import
+
+    experiment_id = get_experiment_id(experiment_config)
     dataset = load_dataset(
         experiment_config.dataset.name,
         experiment_config.dataset.split,
@@ -322,12 +352,16 @@ def api_inference_pipeline(
     )
     model = ModelFactory.create_model(experiment_config, logger)
     logger.info(f"Starting inference on {experiment_config.experiments.model.name}")
+    logger.info(
+        f"We will run inference {experiment_config.experiments.model.number_repetition_eval} times per row"
+    )
     all_results = asyncio.run(
         get_all_completions(
             model,
             processed_dataset,
             experiment_config,
             concurrency_limit=CONCURRENCY_LIMIT,
+            number_repetition_eval=experiment_config.experiments.model.number_repetition_eval,
         )
     )
     thinking_text = ["" for _ in all_results]  # empty reference to not break api
@@ -342,7 +376,7 @@ def api_inference_pipeline(
         thinking_text=thinking_text,
         all_results=all_results,
         logger=logger,
-        experiment_id=experiment_config.experiments.training_id,
+        experiment_id=experiment_id,
     )
     predictions = [row.pontuacao for row in all_results]
     return compute_metrics((predictions, labels), experiment_config)
