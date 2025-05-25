@@ -33,6 +33,7 @@ def get_api_key(provider: str) -> Optional[str]:
     provider_map = {
         "maritaca_sabia_3": "MARITACA_API_KEY",
         "openai_chatgpt_4o": "OPENAI_API_KEY",
+        "deepseek_r1": "DEEPSEEK_API_KEY"
         # Add more providers as needed
     }
     

@@ -73,7 +73,7 @@ async def get_completion_with_retry(
     experiment_config,
     max_retries: int = 5,
 ) -> AggregatedCompetencia | AggregatedReasoningCompetencia:
-    retries = 0
+    api_retries = 0
     while True:
         try:
             responses = []
@@ -103,20 +103,42 @@ async def get_completion_with_retry(
             if experiment_config.experiments.model.type in [
                 ModelTypesEnum.DEEPSEEK_R1.value
             ]:
-                for _ in range(number_of_calls_per_model):
-                    completion = await client.chat.completions.create(
-                        model=model_name,
-                        messages=messages,
-                        stop=list(experiment_config.experiments.model.stop),
-                        stream=False,
-                    )
-                    think_text = completion.choices[0].message.reasoning_content
-                    content = completion.choices[0].message.content
-                    evaluation = parse_deepseek_response(content)
-                    answer = ReasoningCompetencia(
-                        thinking=think_text, competencia=evaluation
-                    )
-                    responses.append(answer)
+                successful_responses = 0
+                parsing_retries = 0
+                while successful_responses < number_of_calls_per_model:
+                    try:
+                        completion = await client.chat.completions.create(
+                            model=model_name,
+                            messages=messages,
+                            stop=list(experiment_config.experiments.model.stop),
+                            stream=False,
+                        )
+                        think_text = completion.choices[0].message.reasoning_content
+                        content = completion.choices[0].message.content
+
+                        # This might raise ValueError
+                        evaluation = parse_deepseek_response(content)
+
+                        # If we get here, parsing was successful
+                        answer = ReasoningCompetencia(
+                            thinking=think_text, competencia=evaluation
+                        )
+                        responses.append(answer)
+                        successful_responses += 1
+                        parsing_retries = 0  # Reset parsing retries after success
+
+                    except ValueError as parse_error:
+                        # For JSON parsing errors, use a separate retry counter
+                        parsing_retries += 1
+                        wait_time = (2**parsing_retries) * EXPONENTIAL_BACKOFF_DELAY
+                        print(
+                            f"JSON parsing error: {parse_error}. "
+                            f"Parsing retry #{parsing_retries} in {wait_time} seconds..."
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                # Only reach this point when we have all required responses
                 essay_scores = [resp.competencia.pontuacao for resp in responses]
                 explanations = [resp.competencia.justificativa for resp in responses]
                 thinking_list = [resp.thinking for resp in responses]
@@ -130,12 +152,15 @@ async def get_completion_with_retry(
                 )
                 return final_answer
         except Exception as e:
-            if retries >= max_retries:
+            # For non-parsing errors (API issues, network problems, etc.)
+            if api_retries >= max_retries:
                 raise e
-            wait_time = (2**retries) * EXPONENTIAL_BACKOFF_DELAY  # Exponential backoff
-            print(f"Rate limit exceeded, retrying in {wait_time} seconds...")
+            api_retries += 1
+            wait_time = (2**api_retries) * EXPONENTIAL_BACKOFF_DELAY
+            print(
+                f"API error occurred: {str(e)}. API retry #{api_retries}/{max_retries} in {wait_time} seconds..."
+            )
             await asyncio.sleep(wait_time)
-            retries += 1
 
 
 async def get_completion(
