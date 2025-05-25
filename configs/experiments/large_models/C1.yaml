@@ -1,10 +1,13 @@
 model:
-  name: "neuralmind/bert-large-portuguese-cased"
+  name: "kamel-usp/jbcs2025_bertimbau-large-C1"
   type: "encoder_classification"
   num_labels: 6
   output_dir: "./results/bertimbau_large/C1"
   logging_dir: "./logs/bertimbau_large/C1"
   best_model_dir: "./results/bertimbau_large/C1/best_model"
+
+tokenizer:
+  name: "neuralmind/bert-large-portuguese-cased"
 
 dataset:
   grade_index: 0
