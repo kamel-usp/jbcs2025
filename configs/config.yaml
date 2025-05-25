@@ -15,9 +15,10 @@ training_params:
   metric_for_best_model: "QWK"
   bf16: True
 
-inference:
-  model_id: "kamel-usp/jbcs2025_your_model_name"
-  seed: 42
+  inference:
+    # Replace with actual model name from huggingface hub
+    model_id: "kamel-usp/jbcs2025_your_model_name"
+    seed: 42
   batch_size: 16
 
 post_training_results:
