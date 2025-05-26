@@ -1,8 +1,8 @@
 defaults:
   - _self_
-  - experiments: api_models_llm/C5
+  - experiments: slm_decoder_models/C1
 
-cache_dir: "/media/data/tmp/"
+cache_dir: "/tmp/"
 
 dataset:
   name: "kamel-usp/aes_enem_dataset"
@@ -14,12 +14,6 @@ training_params:
   logging_steps: 100
   metric_for_best_model: "QWK"
   bf16: True
-
-  inference:
-    # Replace with actual model name from huggingface hub
-    model_id: "kamel-usp/jbcs2025_your_model_name"
-    seed: 42
-  batch_size: 16
 
 post_training_results:
   model_path: /workspace/jbcs2025/outputs/2025-03-24/20-42-59

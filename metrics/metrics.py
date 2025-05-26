@@ -1,7 +1,7 @@
 import csv
-from collections import OrderedDict
 import logging
 import os
+from collections import OrderedDict
 
 import numpy as np
 from sklearn.metrics import (
@@ -97,7 +97,7 @@ def compute_metrics(eval_pred, cfg):
         "Micro_F1": micro_f1,
         "Weighted_F1": weighted_f1,
     }
-    cm = confusion_matrix(all_true_labels, all_predictions)
+    cm = confusion_matrix(all_true_labels, all_predictions, labels=ALL_LABELS)
     n_classes = cm.shape[0]
     for i in range(n_classes):
         TP = cm[i, i]

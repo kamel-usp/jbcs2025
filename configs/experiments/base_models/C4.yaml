@@ -1,10 +1,13 @@
 model:
-  name: "google-bert/bert-base-multilingual-cased"
+  name: "kamel-usp/jbcs2025_bertimbau_base-C4"
   type: "encoder_classification"
   num_labels: 6
-  output_dir: "./results/mbert_base/C4"
-  logging_dir: "./logs/mbert_base/C4"
-  best_model_dir: "./results/mbert_base/C4/best_model"
+  output_dir: "./results/bertimbau_base/C4"
+  logging_dir: "./logs/bertimbau_base/C4"
+  best_model_dir: "./results/bertimbau_base/C4/best_model"
+
+tokenizer:
+  name: "neuralmind/bert-base-portuguese-cased"
 
 dataset:
   grade_index: 3
