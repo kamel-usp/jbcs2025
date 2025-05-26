@@ -1,5 +1,4 @@
 from logging import Logger
-from typing import Optional
 
 from omegaconf import DictConfig
 from peft import LoraConfig, PeftModel, TaskType, get_peft_model
@@ -61,9 +60,7 @@ def load_phi3_classification_lora(cfg: DictConfig, logger: Logger):
     return model
 
 
-def load_slm_decoder_classification_lora(
-    cfg: DictConfig, logger: Logger, checkpoint_path: Optional[str] = None
-):
+def load_slm_decoder_classification_lora(cfg: DictConfig, logger: Logger):
     model_cfg = cfg.experiments.model
     checkpoint_path = model_cfg.checkpoint_path
 
@@ -92,8 +89,9 @@ def load_slm_decoder_classification_lora(
             attn_implementation="flash_attention_2",
         )
         model = get_peft_model(base_model, lora_config)
-        if cfg.experiments.training_params.gradient_checkpointing and (
-            not checkpoint_path or checkpoint_path == "None"
+        if (
+            cfg.experiments.training_params.gradient_checkpointing
+            and not checkpoint_path
         ):
             model.enable_input_require_grads()
         logger.info("Initialized new PEFT model for training")
