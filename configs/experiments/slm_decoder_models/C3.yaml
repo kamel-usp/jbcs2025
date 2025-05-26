@@ -9,6 +9,11 @@ model:
   lora_dropout: 0.05
   lora_alpha: 16
   lora_target_modules: "all-linear"
+  # Empty string for new training, or path like "kamel-usp/jbcs2025_phi35-balanced-C3" for loading pre trained
+  checkpoint_path: "kamel-usp/jbcs2025_phi4-balanced-C3"
+
+tokenizer:
+  name: "microsoft/phi-4"
 
 dataset:
   grade_index: 2
