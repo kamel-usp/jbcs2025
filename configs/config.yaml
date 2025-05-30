@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - experiments: slm_decoder_models/C1
+  - experiments: base_models/C1
 
 cache_dir: "/tmp/"
 
