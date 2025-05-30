@@ -2,6 +2,7 @@ import csv
 import logging
 import os
 from collections import OrderedDict
+from typing import Tuple, List
 
 import numpy as np
 from sklearn.metrics import (
@@ -13,6 +14,7 @@ from sklearn.metrics import (
 )
 
 from models.fine_tuning_models.model_types_enum import ModelTypesEnum
+from trainer.prediction_decoder import PredictionDecoder 
 
 ALL_LABELS = [0, 40, 80, 120, 160, 200]
 
@@ -29,60 +31,100 @@ def enem_accuracy_score(true_values, predicted_values):
     return non_divergent_count / len(true_values)
 
 
-def compute_metrics(eval_pred, cfg):
-    transformers_logger = logging.getLogger("transformers")
-    if cfg.experiments.model.type in [
-        ModelTypesEnum.ENCODER_CLASSIFICATION.value,
-        ModelTypesEnum.LLAMA31_CLASSIFICATION_LORA.value,
-        ModelTypesEnum.PHI35_CLASSIFICATION_LORA.value,
-        ModelTypesEnum.PHI4_CLASSIFICATION_LORA.value,
-    ]:
-        logits, all_true_labels = eval_pred
-        all_predictions = np.argmax(logits, axis=1)
-        all_true_labels = list(map(lambda x: x * 40, all_true_labels))
-        all_predictions = list(map(lambda x: x * 40, all_predictions))
-    elif cfg.experiments.model.type in [
+def _is_api_model(model_type: str) -> bool:
+    """Check if the model type is an API model."""
+    api_models = {
         ModelTypesEnum.CHATGPT_4O.value,
         ModelTypesEnum.MARITACA_SABIA.value,
         ModelTypesEnum.DEEPSEEK_R1.value,
-    ]:
+    }
+    return model_type in api_models
+
+
+def _is_classification_model(model_type: str) -> bool:
+    """Check if the model type is a classification model (including ordinal)."""
+    # Check if it contains any classification-related keywords
+    model_type_upper = model_type.upper()
+    return any(keyword in model_type_upper for keyword in ["CLASSIFICATION", "ORDINAL"])
+
+
+def _process_predictions(eval_pred, model_type: str) -> Tuple[List[int], List[int]]:
+    """Process predictions based on model type."""
+    if _is_api_model(model_type):
+        # API models directly return predictions and labels
         all_predictions, all_true_labels = eval_pred
-    # elif model.config.problem_type == "regression":
-    #     rounded_tensor = np.round(logits)
-    #     # Clamp the values to the range [0, 5]
-    #     clamped_tensor = np.clip(rounded_tensor, a_min=0, a_max=5)
-    #     all_predictions = np.argmax(clamped_tensor, axis=1)
+        return all_predictions, all_true_labels
+    
+    elif _is_classification_model(model_type):
+        # Classification and ordinal models return logits
+        logits, all_true_labels = eval_pred
+        
+        # Use PredictionDecoder to handle both standard and ordinal predictions
+        all_predictions = PredictionDecoder.decode(logits, model_type)
+        
+        # Ensure true labels are in the correct format (original scale)
+        if isinstance(all_true_labels[0], (int, np.integer)) and all_true_labels.max() <= 5:
+            all_true_labels = all_true_labels * 40
+        
+        return all_predictions.tolist(), all_true_labels.tolist()
+    
     else:
-        raise AttributeError("problem_type from model.config is None!")
-    # all_predictions = corn_label_from_logits(torch.from_numpy(logits))
-    # revert back
-    # Initialize the metrics
-    accuracy = accuracy_score(all_true_labels, all_predictions)
+        raise ValueError(f"Unknown model type: {model_type}")
+
+
+def compute_metrics(eval_pred, cfg):
+    """Compute evaluation metrics for the model."""
+    transformers_logger = logging.getLogger("transformers")
+    model_type = cfg.experiments.model.type
+    
+    try:
+        # Process predictions based on model type
+        all_predictions, all_true_labels = _process_predictions(eval_pred, model_type)
+        
+        # Compute metrics
+        metrics = _calculate_metrics(all_true_labels, all_predictions)
+        
+        # Log results
+        transformers_logger.info(metrics)
+        
+        return metrics
+        
+    except Exception as e:
+        transformers_logger.error(f"Error computing metrics: {str(e)}")
+        raise
+
+
+def _calculate_metrics(true_labels: List[int], predictions: List[int]) -> dict:
+    """Calculate all evaluation metrics."""
+    # Basic metrics
+    accuracy = accuracy_score(true_labels, predictions)
     qwk = cohen_kappa_score(
-        all_true_labels,
-        all_predictions,
+        true_labels,
+        predictions,
         weights="quadratic",
         labels=ALL_LABELS,
     )
-    rmse = root_mean_squared_error(all_true_labels, all_predictions)
-    horizontal_discrepancy = enem_accuracy_score(all_true_labels, all_predictions)
+    rmse = root_mean_squared_error(true_labels, predictions)
+    horizontal_discrepancy = enem_accuracy_score(true_labels, predictions)
+    
+    # F1 scores
     macro_f1 = f1_score(
-        all_true_labels,
-        all_predictions,
+        true_labels,
+        predictions,
         average="macro",
         labels=ALL_LABELS,
         zero_division=np.nan,
     )
     micro_f1 = f1_score(
-        all_true_labels,
-        all_predictions,
+        true_labels,
+        predictions,
         average="micro",
         labels=ALL_LABELS,
         zero_division=np.nan,
     )
     weighted_f1 = f1_score(
-        all_true_labels,
-        all_predictions,
+        true_labels,
+        predictions,
         average="weighted",
         labels=ALL_LABELS,
         zero_division=np.nan,
@@ -97,29 +139,47 @@ def compute_metrics(eval_pred, cfg):
         "Micro_F1": micro_f1,
         "Weighted_F1": weighted_f1,
     }
-    cm = confusion_matrix(all_true_labels, all_predictions, labels=ALL_LABELS)
+    
+    # Add confusion matrix metrics
+    results.update(_calculate_confusion_matrix_metrics(true_labels, predictions))
+    
+    return results
+
+
+def _calculate_confusion_matrix_metrics(true_labels: List[int], predictions: List[int]) -> dict:
+    """Calculate per-class confusion matrix metrics."""
+    cm = confusion_matrix(true_labels, predictions, labels=ALL_LABELS)
     n_classes = cm.shape[0]
+    
+    metrics = {}
     for i in range(n_classes):
         TP = cm[i, i]
         FN = np.sum(cm[i, :]) - TP
         FP = np.sum(cm[:, i]) - TP
         TN = np.sum(cm) - (TP + FP + FN)
-        results.update({f"TP_{i}": TP})
-        results.update({f"TN_{i}": TN})
-        results.update({f"FP_{i}": FP})
-        results.update({f"FN_{i}": FN})
-    transformers_logger.info(results)
-    return results
+        
+        metrics.update({
+            f"TP_{i}": TP,
+            f"TN_{i}": TN,
+            f"FP_{i}": FP,
+            f"FN_{i}": FN,
+        })
+    
+    return metrics
 
 
 def save_evaluation_results_to_csv(
     training_id, evaluation_results, timestamp, file_path="evaluation_results.csv"
 ):
-    # Add a timestamp to the evaluation results
-    evaluation_results_with_timestamp = evaluation_results.copy()
-    evaluation_results_with_timestamp["timestamp"] = timestamp
-    evaluation_results_with_timestamp["id"] = training_id
-    ordered_dict = OrderedDict(evaluation_results_with_timestamp)
+    """Save evaluation results to a CSV file."""
+    # Add metadata to results
+    evaluation_results_with_metadata = evaluation_results.copy()
+    evaluation_results_with_metadata.update({
+        "timestamp": timestamp,
+        "id": training_id,
+    })
+    
+    ordered_dict = OrderedDict(evaluation_results_with_metadata)
 
     # Determine if we need to write headers
     write_headers = not os.path.exists(file_path)
