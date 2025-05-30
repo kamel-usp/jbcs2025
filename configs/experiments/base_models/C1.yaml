@@ -2,9 +2,9 @@ model:
   name: "neuralmind/bert-base-portuguese-cased"
   type: "encoder_classification"
   num_labels: 6
-  output_dir: "./results/bertimbau-base/C1"
-  logging_dir: "./logs/bertimbau-base/C1"
-  best_model_dir: "./results/bertimbau-base/C1/best_model"
+  output_dir: "./results/"
+  logging_dir: "./logs/"
+  best_model_dir: "./results/best_model"
 
 tokenizer:
   name: "neuralmind/bert-base-portuguese-cased"

@@ -119,7 +119,7 @@ def fine_tune_pipeline(experiment_config: DictConfig, logger: Logger):
         class_weights=class_weights_tensor,
     )
     # Start training
-    return trainer, tokenized_dataset
+    return trainer, tokenized_dataset, tokenizer
 
 
 if __name__ == "__main__":

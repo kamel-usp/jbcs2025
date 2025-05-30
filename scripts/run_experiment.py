@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+import shutil
 import sys
 from datetime import datetime
 from logging import Logger
@@ -14,6 +15,10 @@ import torch
 from fine_tuning import fine_tune_pipeline
 from omegaconf import DictConfig, OmegaConf
 from transformers import set_seed
+
+from models.fine_tuning_models.model_config.model_config import ModelConfig
+from models.fine_tuning_models.model_factory import ModelFactory
+from models.fine_tuning_models.model_types_enum import ModelArchitecture
 
 # Append the parent directory to sys.path using pathlib
 parent_dir = Path(__file__).resolve().parent.parent
@@ -54,7 +59,7 @@ def get_experiment_id(experiment_config: DictConfig) -> str:
 
 
 def fine_tune_process(cfg: DictConfig, logger: Logger):
-    trainer, tokenized_dataset = fine_tune_pipeline(cfg, logger)
+    trainer, tokenized_dataset, tokenizer = fine_tune_pipeline(cfg, logger)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     evaluate_baseline = trainer.evaluate()
     evaluate_baseline["epoch"] = -1
@@ -82,7 +87,14 @@ def fine_tune_process(cfg: DictConfig, logger: Logger):
         evaluate_test,
         current_time,
     )
-    trainer.save_model(cfg.experiments.model.best_model_dir)
+
+    # Save model and tokenizer
+    best_model_dir = cfg.experiments.model.best_model_dir
+    trainer.save_model(best_model_dir)
+    tokenizer.save_pretrained(best_model_dir)
+    logger.info(f"Model and tokenizer saved to {best_model_dir}")
+
+    return experiment_id
 
 
 def api_calling_pipeline(cfg: DictConfig, logger: Logger):
@@ -99,6 +111,7 @@ def api_calling_pipeline(cfg: DictConfig, logger: Logger):
 @hydra.main(version_base="1.1", config_path="../configs/", config_name="config")
 def main(cfg: DictConfig):
     logger.info(OmegaConf.to_yaml(cfg))
+    original_output_dir = os.getcwd()
 
     set_seed(cfg.training_params.seed)
     torch.manual_seed(cfg.training_params.seed)
@@ -110,23 +123,69 @@ def main(cfg: DictConfig):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     torch.use_deterministic_algorithms(True)
-    if cfg.experiments.model.type in [
-        ModelTypesEnum.ENCODER_CLASSIFICATION.value,
-        ModelTypesEnum.LLAMA31_CLASSIFICATION_LORA.value,
-        ModelTypesEnum.PHI35_CLASSIFICATION_LORA.value,
-        ModelTypesEnum.PHI4_CLASSIFICATION_LORA.value,
+    model_config = ModelConfig.from_model_type(cfg.experiments.model.type)
+
+    experiment_id = None
+    if model_config.architecture in [
+        ModelArchitecture.ENCODER,
+        ModelArchitecture.PHI35,
+        ModelArchitecture.PHI4,
+        ModelArchitecture.LLAMA31,
     ]:
         logger.info("Starting the Fine Tuning training process.")
-        fine_tune_process(cfg, logger)
+        experiment_id = fine_tune_process(cfg, logger)
         logger.info("Fine Tuning Finished.")
-    elif cfg.experiments.model.type in [
-        ModelTypesEnum.CHATGPT_4O.value,
-        ModelTypesEnum.MARITACA_SABIA.value,
-        ModelTypesEnum.DEEPSEEK_R1.value,
-    ]:
+    elif cfg.experiments.model.type in ModelFactory.API_MODELS:
         logger.info("Starting Zero-Shot or Few-Shot Learning Process")
         api_calling_pipeline(cfg, logger)
         logger.info("API Calls Pipeline Finished.")
+        experiment_id = get_experiment_id(cfg)
+
+    # Rename output directory with experiment ID (similar to run_inference_experiment.py)
+    if experiment_id:
+        # Close all file handlers to release log files
+        handlers = list(logger.handlers)
+        for handler in handlers:
+            handler.close()
+            logger.removeHandler(handler)
+
+        # Also close root logger's handlers
+        root_logger = logging.getLogger()
+        for handler in list(root_logger.handlers):
+            handler.close()
+            root_logger.removeHandler(handler)
+
+        # Prepare new directory name
+        parent_dir = os.path.dirname(original_output_dir)
+        new_dir_name = os.path.join(parent_dir, f"{experiment_id}_training")
+
+        # Check if target directory already exists
+        if os.path.exists(new_dir_name):
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            new_dir_name = f"{new_dir_name}_{timestamp}"
+
+        try:
+            # Create new directory and copy files
+            os.makedirs(new_dir_name, exist_ok=True)
+
+            # Copy files one by one
+            for item in os.listdir(original_output_dir):
+                src_path = os.path.join(original_output_dir, item)
+                dst_path = os.path.join(new_dir_name, item)
+
+                try:
+                    if os.path.isfile(src_path):
+                        shutil.copy2(src_path, dst_path)
+                    elif os.path.isdir(src_path):
+                        shutil.copytree(src_path, dst_path)
+                except Exception as e:
+                    print(f"Failed to copy {item}: {e}")
+
+            print(f"Training outputs copied to: {new_dir_name}")
+            print(f"Original directory remains at: {original_output_dir}")
+
+        except Exception as e:
+            print(f"Failed to create output directory: {e}")
 
 
 if __name__ == "__main__":
