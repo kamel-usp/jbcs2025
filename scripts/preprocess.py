@@ -9,7 +9,8 @@ from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizer
 # Append the parent directory to sys.path using pathlib
 parent_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
-from models.fine_tuning_models.model_types_enum import ModelTypesEnum  # NOQA: E402
+from models.fine_tuning_models.model_config import ModelConfig # NOQA: E402
+from models.fine_tuning_models.model_types_enum import ModelArchitecture, ModelTypesEnum  # NOQA: E402
 from scripts.constants.prompts.phi_models import (  # noqa: E402
     CONCEPT1_SYSTEM,
     CONCEPT2_SYSTEM,
@@ -75,7 +76,8 @@ def get_tokenize_function(
     padding = None
     truncation = None
     tokenize_function_def = None
-    if model_type == ModelTypesEnum.ENCODER_CLASSIFICATION.value:
+    model_config = ModelConfig.from_model_type(model_type)
+    if model_config.architecture == ModelArchitecture.ENCODER:
         padding = "max_length"
         truncation = True
         padding_side = "right"
@@ -92,9 +94,9 @@ def get_tokenize_function(
 
         tokenize_function_def = tokenize_function
 
-    if model_type in [
-        ModelTypesEnum.PHI35_CLASSIFICATION_LORA.value,
-        ModelTypesEnum.PHI4_CLASSIFICATION_LORA.value,
+    if model_config.architecture in [
+        ModelArchitecture.PHI35,
+        ModelArchitecture.PHI4,
     ]:
         padding = "longest"
         truncation = False
@@ -135,7 +137,7 @@ def get_tokenize_function(
             )
 
         tokenize_function_def = tokenize_function
-    if model_type in [ModelTypesEnum.LLAMA31_CLASSIFICATION_LORA.value]:
+    if model_config.architecture in [ModelArchitecture.LLAMA31]:
         padding = "longest"
         truncation = False
         padding_side = "left"

@@ -44,9 +44,19 @@ class WeightedLossTrainer(Trainer):
         loss_type = self.model_config.loss_type
 
         if loss_type == LossType.CORAL:
-            return CORALLossStrategy()
+            return CORALLossStrategy(
+                num_classes=self.model_config.num_labels,
+                class_weights=class_weights.to(self.model.device)
+                if class_weights is not None
+                else None
+            )
         elif loss_type == LossType.CORN:
-            return CORNLossStrategy()
+            return CORNLossStrategy(
+                num_classes=self.model_config.num_labels,
+                class_weights=class_weights.to(self.model.device)
+                if class_weights is not None
+                else None
+            )
         else:
             return CrossEntropyLossStrategy(
                 class_weights.to(self.model.device)
@@ -58,7 +68,6 @@ class WeightedLossTrainer(Trainer):
         self, model, inputs, return_outputs=False, num_items_in_batch=None
     ):
         labels = inputs.get("labels")
-
         # Forward pass
         outputs = model(**inputs)
         logits = outputs.get("logits")

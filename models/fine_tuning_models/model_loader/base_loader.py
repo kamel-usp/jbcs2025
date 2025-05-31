@@ -8,6 +8,7 @@ from transformers import (
 )
 
 from models.fine_tuning_models.model_config.model_config import ModelConfig
+from models.fine_tuning_models.model_types_enum import ModelArchitecture
 
 
 class BaseModelLoader(ABC):
@@ -26,15 +27,25 @@ class BaseModelLoader(ABC):
 
     def _get_base_model_kwargs(self) -> Dict[str, Any]:
         """Common kwargs for model initialization."""
-        id2label = {0: 0, 1: 40, 2: 80, 3: 120, 4: 160, 5: 200}
-        label2id = {0: 0, 40: 1, 80: 2, 120: 3, 160: 4, 200: 5}
-        return {
+        kwargs = {
             "num_labels": self.model_config.num_labels,
-            "id2label": id2label,
-            "label2id": label2id,
             "cache_dir": self.cfg.cache_dir,
             "trust_remote_code": True,
+            "device_map": "cuda",
+            "torch_dtype": "auto",
         }
+        # Only add label mappings for classification models using cross entropy
+        if self.model_config.architecture == ModelArchitecture.ENCODER and not self.model_config.is_ordinal:
+            id2label = {0: 0, 1: 40, 2: 80, 3: 120, 4: 160, 5: 200}
+            label2id = {0: 0, 40: 1, 80: 2, 120: 3, 160: 4, 200: 5}
+            kwargs.update({
+                "id2label": id2label,
+                "label2id": label2id,
+            })
+        if self.model_config.is_ordinal:
+            kwargs.update({"num_labels": self.model_config.num_labels -1})
+        
+        return kwargs
 
     def _get_decoder_model_kwargs(self) -> Dict[str, Any]:
         """Additional kwargs for decoder models."""

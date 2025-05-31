@@ -41,11 +41,8 @@ class ModelConfig:
         else:
             loss_type = LossType.CROSS_ENTROPY
         
-        # Calculate number of labels
-        num_labels = num_classes - 1 if loss_type != LossType.CROSS_ENTROPY else num_classes
-        
         return cls(
             architecture=architecture,
             loss_type=loss_type,
-            num_labels=num_labels
+            num_labels=num_classes
         )
