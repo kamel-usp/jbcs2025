@@ -36,4 +36,4 @@ class CORALLossStrategy(OrdinalLossStrategy):
             if self.class_weights is not None
             else None
         )
-        return coral_loss(logits, levels.to(logits.device), importance_weights=importance_weights)
+        return coral_loss(logits, levels.to(logits.device), importance_weights=importance_weights.to(logits.device))

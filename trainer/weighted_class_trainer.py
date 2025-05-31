@@ -48,14 +48,14 @@ class WeightedLossTrainer(Trainer):
                 num_classes=self.model_config.num_labels,
                 class_weights=class_weights.to(self.model.device)
                 if class_weights is not None
-                else None
+                else None,
             )
         elif loss_type == LossType.CORN:
             return CORNLossStrategy(
                 num_classes=self.model_config.num_labels,
                 class_weights=class_weights.to(self.model.device)
                 if class_weights is not None
-                else None
+                else None,
             )
         else:
             return CrossEntropyLossStrategy(
@@ -63,13 +63,16 @@ class WeightedLossTrainer(Trainer):
                 if class_weights is not None
                 else None
             )
-
+        
     def compute_loss(
         self, model, inputs, return_outputs=False, num_items_in_batch=None
     ):
+        # TODO this is overwritting Trainer method, need to review
+        input_ids = inputs.get("input_ids")
+        attention_mask = inputs.get("attention_mask")
         labels = inputs.get("labels")
         # Forward pass
-        outputs = model(**inputs)
+        outputs = model(**{"input_ids": input_ids, "attention_mask": attention_mask})
         logits = outputs.get("logits")
 
         # Compute loss using strategy
