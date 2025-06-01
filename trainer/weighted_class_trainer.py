@@ -19,7 +19,7 @@ class WeightedLossTrainer(Trainer):
         model_type: Optional[str] = None,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, compute_loss_func=self.custom_loss, **kwargs)
 
         # Parse model configuration
         self.model_config = (
@@ -63,21 +63,11 @@ class WeightedLossTrainer(Trainer):
                 if class_weights is not None
                 else None
             )
-        
-    def compute_loss(
-        self, model, inputs, return_outputs=False, num_items_in_batch=None
-    ):
-        # TODO this is overwritting Trainer method, need to review
-        input_ids = inputs.get("input_ids")
-        attention_mask = inputs.get("attention_mask")
-        labels = inputs.get("labels")
-        # Forward pass
-        outputs = model(**{"input_ids": input_ids, "attention_mask": attention_mask})
-        logits = outputs.get("logits")
 
-        # Compute loss using strategy
-        loss = self.loss_strategy.compute(
-            logits=logits, labels=labels, model_config=self.model.config
+    def custom_loss(self, outputs, labels, *, num_items_in_batch=None, **unused):
+        labels = labels.to(outputs.logits.device)
+        return self.loss_strategy.compute(
+            logits=outputs.logits,
+            labels=labels,
+            model_config=self.model.config,
         )
-
-        return (loss, outputs) if return_outputs else loss

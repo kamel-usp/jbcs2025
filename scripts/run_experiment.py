@@ -157,7 +157,7 @@ def main(cfg: DictConfig):
 
         # Prepare new directory name
         parent_dir = os.path.dirname(original_output_dir)
-        new_dir_name = os.path.join(parent_dir, f"{experiment_id}_training")
+        new_dir_name = os.path.join(parent_dir, f"{experiment_id}")
 
         # Check if target directory already exists
         if os.path.exists(new_dir_name):
