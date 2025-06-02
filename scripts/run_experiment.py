@@ -12,6 +12,7 @@ os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 import hydra
 import numpy as np
 import torch
+from codecarbon import EmissionsTracker
 from fine_tuning import fine_tune_pipeline
 from omegaconf import DictConfig, OmegaConf
 from transformers import set_seed
@@ -26,6 +27,7 @@ sys.path.append(str(parent_dir))
 
 # Register OmegaConf resolvers BEFORE hydra.main is called
 from utils.secrets.secret_manager import register_resolvers  # NOQA
+from utils.logger.additional_logging import log_gpu_info  # NOQA
 
 register_resolvers()
 
@@ -112,6 +114,15 @@ def api_calling_pipeline(cfg: DictConfig, logger: Logger):
 def main(cfg: DictConfig):
     logger.info(OmegaConf.to_yaml(cfg))
     original_output_dir = os.getcwd()
+    tracker = EmissionsTracker(
+        project_name="jbcs2025",
+        experiment_id=get_experiment_id(cfg),
+        output_dir=original_output_dir,
+        output_file="emissions.csv",
+        log_level="error",
+        measure_power_secs=30,
+    )
+    tracker.start()
 
     set_seed(cfg.training_params.seed)
     torch.manual_seed(cfg.training_params.seed)
@@ -123,6 +134,8 @@ def main(cfg: DictConfig):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     torch.use_deterministic_algorithms(True)
+
+    log_gpu_info(logger)
     model_config = ModelConfig.from_model_type(cfg.experiments.model.type)
 
     experiment_id = None
@@ -140,6 +153,10 @@ def main(cfg: DictConfig):
         api_calling_pipeline(cfg, logger)
         logger.info("API Calls Pipeline Finished.")
         experiment_id = get_experiment_id(cfg)
+
+    # Stop emissions tracking
+    emissions = tracker.stop()
+    logger.info(f"Total emissions: {emissions:.4f} kg CO2eq")
 
     # Rename output directory with experiment ID (similar to run_inference_experiment.py)
     if experiment_id:
