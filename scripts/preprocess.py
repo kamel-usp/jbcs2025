@@ -189,7 +189,7 @@ def get_tokenize_function(
                 truncation=truncation,
                 padding_side=padding_side,
             )
-
+        tokenizer.pad_token = "<|finetune_right_pad_id|>"
         tokenize_function_def = tokenize_function
     if tokenize_function_def is None:
         raise ValueError(
