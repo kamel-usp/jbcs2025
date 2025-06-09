@@ -2,35 +2,40 @@ from logging import Logger
 
 from omegaconf import DictConfig
 from models.api_models.open_ai_api import create_openai_client
-from models.fine_tuning_models.classification_head import (
-    load_slm_decoder_classification_lora,
-    load_model_with_classification_head,
-    load_phi3_classification_lora,
-)
+from models.fine_tuning_models.model_config.model_config import ModelConfig
+from models.fine_tuning_models.model_loader import EncoderModelLoader, DecoderModelLoraLoader
 from models.fine_tuning_models.model_types_enum import ModelTypesEnum
 
 
 class ModelFactory:
+    # API model types
+    API_MODELS = {
+        ModelTypesEnum.CHATGPT_4O.value,
+        ModelTypesEnum.MARITACA_SABIA.value,
+        ModelTypesEnum.DEEPSEEK_R1.value,
+    }
+    
     @staticmethod
     def create_model(experiment_config: DictConfig, logger: Logger):
-        model_cfg = experiment_config.experiments.model
-        model = None
-        if model_cfg.type == ModelTypesEnum.ENCODER_CLASSIFICATION.value:
-            model = load_model_with_classification_head(experiment_config)
-        if model_cfg.type == ModelTypesEnum.PHI35_CLASSIFICATION_LORA.value:
-            model = load_phi3_classification_lora(experiment_config, logger)
-        if model_cfg.type in [
-            ModelTypesEnum.PHI4_CLASSIFICATION_LORA.value,
-            ModelTypesEnum.LLAMA31_CLASSIFICATION_LORA.value,
-        ]:
-            model = load_slm_decoder_classification_lora(experiment_config, logger)
-        if model_cfg.type in [
-            ModelTypesEnum.CHATGPT_4O.value,
-            ModelTypesEnum.MARITACA_SABIA.value,
-            ModelTypesEnum.DEEPSEEK_R1.value,
-        ]:
-            model = create_openai_client(experiment_config, logger)
-        if model is None:
-            raise ValueError("You need to provide a valid Model Classification Type")
-
-        return model
+        model_type = experiment_config.experiments.model.type
+        
+        # Handle API models
+        if model_type in ModelFactory.API_MODELS:
+            return create_openai_client(experiment_config, logger)
+        
+        # Parse model configuration
+        model_config = ModelConfig.from_model_type(model_type)
+        
+        # Select appropriate loader
+        if model_config.is_lora:
+            loader = DecoderModelLoraLoader(experiment_config, logger, model_config)
+        else:
+            loader = EncoderModelLoader(experiment_config, logger, model_config)
+        
+        return loader.load()
+    
+    @staticmethod
+    def get_loss_type(model_type: str) -> str:
+        """Extract loss type from model type."""
+        model_config = ModelConfig.from_model_type(model_type)
+        return model_config.loss_type.value

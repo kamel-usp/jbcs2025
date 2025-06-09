@@ -1,10 +1,10 @@
 model:
-  name: "kamel-usp/jbcs2025_bertimbau_base-C1"
-  type: "encoder_classification"
+  name: "neuralmind/bert-base-portuguese-cased"
+  type: "encoder_ordinal_coral"
   num_labels: 6
-  output_dir: "./results/mbert_base/C1"
-  logging_dir: "./logs/mbert_base/C1"
-  best_model_dir: "./results/mbert_base/C1/best_model"
+  output_dir: "./results/"
+  logging_dir: "./logs/"
+  best_model_dir: "./results/best_model"
 
 tokenizer:
   name: "neuralmind/bert-base-portuguese-cased"
