@@ -63,7 +63,7 @@ def _process_predictions(eval_pred, model_type: str) -> Tuple[List[int], List[in
         all_predictions = PredictionDecoder.decode(logits, model_type)
         
         # Ensure true labels are in the correct format (original scale)
-        if isinstance(all_true_labels[0], (int, np.integer)) and all_true_labels.max() <= 5:
+        if isinstance(all_true_labels[0], (int, np.integer)) and max(all_true_labels) <= 5:
             all_true_labels = all_true_labels * 40
         
         return all_predictions.tolist(), all_true_labels.tolist()

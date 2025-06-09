@@ -196,13 +196,13 @@ def main(cfg: DictConfig):
                     elif os.path.isdir(src_path):
                         shutil.copytree(src_path, dst_path)
                 except Exception as e:
-                    print(f"Failed to copy {item}: {e}")
+                    logger.error(f"Failed to copy {item}: {e}")
 
-            print(f"Training outputs copied to: {new_dir_name}")
-            print(f"Original directory remains at: {original_output_dir}")
+            logger.info(f"Training outputs copied to: {new_dir_name}")
+            logger.info(f"Original directory remains at: {original_output_dir}")
 
         except Exception as e:
-            print(f"Failed to create output directory: {e}")
+            logger.error(f"Failed to create output directory: {e}")
 
 
 if __name__ == "__main__":
