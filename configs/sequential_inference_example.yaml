@@ -1,0 +1,22 @@
+# Configuration for running inference experiments sequentially
+# Use this with --mode inference
+
+stop_on_failure: false
+delay_between_experiments: 5
+
+experiments:
+  # Example: Run inference with different models for each grade
+  - name: "BERTimbau-inference-C1"
+    reference: "base_models/C1"
+
+  - name: "BERTimbau-inference-C2"
+    reference: "base_models/C2"
+
+  - name: "BERTimbau-inference-C3"
+    reference: "base_models/C3"
+
+  - name: "BERTimbau-inference-C4"
+    reference: "base_models/C4"
+
+  - name: "BERTimbau-inference-C5"
+    reference: "base_models/C5"
