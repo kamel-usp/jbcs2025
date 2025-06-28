@@ -84,9 +84,6 @@ def compute_metrics(eval_pred, cfg):
         # Compute metrics
         metrics = _calculate_metrics(all_true_labels, all_predictions)
         
-        # Log results
-        transformers_logger.info(metrics)
-        
         return metrics
         
     except Exception as e:

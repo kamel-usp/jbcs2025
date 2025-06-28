@@ -6,14 +6,16 @@ import sys
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import hydra
 import numpy as np
+import pandas as pd
 import torch
 from datasets import Dataset, load_dataset
 from omegaconf import DictConfig, OmegaConf
 from sklearn.utils.class_weight import compute_class_weight
+from tqdm.auto import tqdm
 from transformers import TrainingArguments, set_seed
 
 # Append the parent directory to sys.path using pathlib
@@ -99,9 +101,127 @@ def load_model_from_hub(cfg: DictConfig, logger: Logger):
     return model
 
 
-def hf_model_inference(cfg: DictConfig, logger: Logger) -> Dict[str, float]:
+def compute_bootstrap_confidence_intervals(
+    predictions: np.ndarray,
+    labels: np.ndarray,
+    metrics_to_compute: List[str],
+    cfg: DictConfig,
+    n_bootstrap: int = 1000,
+    confidence_level: float = 0.95,
+    random_state: int = None,
+) -> Dict[str, Tuple[float, float, float]]:
+    """
+    Compute bootstrap confidence intervals for specified metrics.
+
+    Parameters:
+        predictions: Model predictions (can be logits or predicted classes)
+        labels: Ground truth labels
+        metrics_to_compute: List of metric names to compute CIs for
+        cfg: Configuration object
+        n_bootstrap: Number of bootstrap samples
+        confidence_level: Confidence level (default 0.95 for 95% CI)
+        random_state: Random seed for reproducibility
+
+    Returns:
+        Dictionary mapping metric names to (mean, lower_bound, upper_bound)
+    """
+    if random_state is not None:
+        np.random.seed(random_state)
+
+    n_samples = len(predictions)
+    bootstrap_metrics = {metric: [] for metric in metrics_to_compute}
+
+    # Perform bootstrap sampling
+    for _ in tqdm(range(n_bootstrap), desc="Performing Bootstrap samples"):
+        # Sample with replacement
+        indices = np.random.choice(n_samples, size=n_samples, replace=True)
+        boot_predictions = predictions[indices]
+        boot_labels = labels[indices]
+
+        # Compute metrics for this bootstrap sample
+        boot_metrics = compute_metrics((boot_predictions, boot_labels), cfg)
+
+        # Store only the requested metrics
+        for metric in metrics_to_compute:
+            if metric in boot_metrics:
+                bootstrap_metrics[metric].append(boot_metrics[metric])
+
+    # Calculate confidence intervals
+    alpha = 1 - confidence_level
+    lower_percentile = (alpha / 2) * 100
+    upper_percentile = (1 - alpha / 2) * 100
+
+    ci_results = {}
+    for metric, values in bootstrap_metrics.items():
+        if values:  # Check if we have values for this metric
+            values_array = np.array(values)
+            mean_val = np.mean(values_array)
+            lower_bound = np.percentile(values_array, lower_percentile)
+            upper_bound = np.percentile(values_array, upper_percentile)
+            ci_results[metric] = (mean_val, lower_bound, upper_bound)
+
+    return ci_results
+
+
+def save_bootstrap_ci_to_csv(
+    experiment_id: str,
+    ci_results: Dict[str, Tuple[float, float, float]],
+    timestamp: str,
+    csv_filename: str = "bootstrap_confidence_intervals.csv",
+) -> None:
+    """
+    Save bootstrap confidence interval results to CSV.
+    If experiment_id exists, overwrite that row; otherwise append.
+
+    Parameters:
+        experiment_id: Unique identifier for the experiment
+        ci_results: Dictionary of metric names to (mean, lower, upper) tuples
+        timestamp: Timestamp of the experiment
+        csv_filename: Name of the output CSV file
+    """
+    # Prepare data for the new row
+    new_row = {
+        "experiment_id": experiment_id,
+        "timestamp": timestamp,
+    }
+
+    # Add CI results
+    for metric, (mean_val, lower, upper) in ci_results.items():
+        new_row[f"{metric}_mean"] = mean_val
+        new_row[f"{metric}_lower_95ci"] = lower
+        new_row[f"{metric}_upper_95ci"] = upper
+        new_row[f"{metric}_ci_width"] = upper - lower
+
+    # Check if CSV exists
+    if os.path.exists(csv_filename):
+        # Read existing data
+        df = pd.read_csv(csv_filename)
+
+        # Check if experiment_id already exists
+        if experiment_id in df["experiment_id"].values:
+            # Overwrite the existing row
+            df = df[df["experiment_id"] != experiment_id]
+            logger.info(
+                f"Overwriting existing CI results for experiment: {experiment_id}"
+            )
+
+        # Append the new row
+        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    else:
+        # Create new dataframe
+        df = pd.DataFrame([new_row])
+
+    # Save to CSV
+    df.to_csv(csv_filename, index=False)
+    logger.info(f"Bootstrap CI results saved to {csv_filename}")
+
+
+def hf_model_inference(
+    cfg: DictConfig, logger: Logger
+) -> Tuple[Dict[str, float], np.ndarray, np.ndarray]:
     """
     Run inference with a Hugging Face model loaded from the hub.
+    Returns metrics and raw predictions/labels for CI computation.
     """
     # Load dataset
     dataset = load_dataset(
@@ -171,7 +291,7 @@ def hf_model_inference(cfg: DictConfig, logger: Logger) -> Dict[str, float]:
         experiment_id=get_experiment_id(cfg),
     )
 
-    return metrics
+    return metrics, logits, labels
 
 
 def run_inference(cfg: DictConfig, logger: Logger):
@@ -187,14 +307,15 @@ def run_inference(cfg: DictConfig, logger: Logger):
         ModelTypesEnum.PHI4_CLASSIFICATION_LORA.value,
     ]:
         logger.info("Running inference with fine-tuned HF model")
-        metrics = hf_model_inference(cfg, logger)
+        metrics, predictions, labels = hf_model_inference(cfg, logger)
     elif cfg.experiments.model.type in [
         ModelTypesEnum.CHATGPT_4O.value,
         ModelTypesEnum.MARITACA_SABIA.value,
         ModelTypesEnum.DEEPSEEK_R1.value,
     ]:
         logger.info("Running inference with API model")
-        metrics = api_inference_pipeline(cfg, logger)
+        # Note: api_inference_pipeline needs to be modified to return predictions and labels
+        metrics, predictions, labels = api_inference_pipeline(cfg, logger)
     else:
         raise ValueError(f"Unsupported model type: {cfg.experiments.model.type}")
 
@@ -205,6 +326,35 @@ def run_inference(cfg: DictConfig, logger: Logger):
         metrics,
         current_time,
     )
+
+    # Compute bootstrap confidence intervals if specified
+    if hasattr(cfg, "bootstrap") and cfg.bootstrap.enabled:
+        metrics_for_ci = cfg.bootstrap.get("metrics", ["QWK"])
+        n_bootstrap = cfg.bootstrap.get("n_bootstrap", 1000)
+
+        logger.info(
+            f"Computing bootstrap confidence intervals for metrics: {metrics_for_ci}"
+        )
+        ci_results = compute_bootstrap_confidence_intervals(
+            predictions=predictions,
+            labels=labels,
+            metrics_to_compute=metrics_for_ci,
+            cfg=cfg,
+            n_bootstrap=n_bootstrap,
+            random_state=cfg.training_params.seed,
+        )
+
+        # Save CI results
+        save_bootstrap_ci_to_csv(
+            experiment_id=experiment_id,
+            ci_results=ci_results,
+            timestamp=current_time,
+        )
+
+        # Log CI results
+        logger.info("Bootstrap Confidence Intervals (95%):")
+        for metric, (mean_val, lower, upper) in ci_results.items():
+            logger.info(f"  {metric}: {mean_val:.4f} [{lower:.4f}, {upper:.4f}]")
 
     # Log results
     logger.info(f"Inference results: {metrics}")
