@@ -23,6 +23,7 @@ parent_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 
 # Register OmegaConf resolvers BEFORE hydra.main is called
+from utils.gpu.estimate_gpu_size import estimate_vram_gib  # NOQA
 from utils.secrets.secret_manager import register_resolvers  # NOQA
 
 register_resolvers()
@@ -95,6 +96,12 @@ def load_model_from_hub(cfg: DictConfig, logger: Logger):
     Load a pretrained model from Hugging Face Hub.
     """
     logger.info(f"Loading model from: {cfg.experiments.model.name}")
+    repo = cfg.experiments.model.name
+    logger.info("Loading model from: %s", repo)
+    inference_gib, training_gib = estimate_vram_gib(repo)
+    logger.info(
+        f"Model need ≈ {inference_gib:.2f} GiB to run inference and {training_gib:.2f} for training "
+    )
 
     model = ModelFactory.create_model(cfg, logger)
 
