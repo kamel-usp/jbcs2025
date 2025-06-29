@@ -253,6 +253,7 @@ def hf_model_inference(
         grade_index=grade_index,
         model_type=cfg.experiments.model.type,
         logger=logger,
+        use_full_context=cfg.experiments.dataset.use_full_context,
     )
 
     # Load the model from Hub

@@ -51,6 +51,7 @@ def fine_tune_pipeline(experiment_config: DictConfig, logger: Logger):
         grade_index=experiment_config.experiments.dataset.grade_index,
         model_type=experiment_config.experiments.model.type,
         logger=logger,
+        use_full_context=experiment_config.experiments.dataset.use_full_context,
     )
 
     # Load the model

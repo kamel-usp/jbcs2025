@@ -16,3 +16,4 @@ outputs/**/*
 .api_keys.yaml
 studies/test_trainer/*
 .env
+sequential_experiments.log

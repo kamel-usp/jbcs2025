@@ -9,7 +9,7 @@ from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizer
 # Append the parent directory to sys.path using pathlib
 parent_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
-from models.fine_tuning_models.model_config import ModelConfig # NOQA: E402
+from models.fine_tuning_models.model_config import ModelConfig  # NOQA: E402
 from models.fine_tuning_models.model_types_enum import ModelArchitecture, ModelTypesEnum  # NOQA: E402
 from scripts.constants.prompts.phi_models import (  # noqa: E402
     CONCEPT1_SYSTEM,
@@ -72,6 +72,7 @@ def get_tokenize_function(
     text_column: str,
     grade_index: int,
     logger: Logger,
+    use_full_context: bool = False,
 ):
     padding = None
     truncation = None
@@ -103,7 +104,9 @@ def get_tokenize_function(
         padding_side = "left"
 
         def tokenize_function(examples: List[str]):
-            def _prompt_template(essay_example):
+            def _prompt_template(
+                essay_example: str, supporting_text: str, essay_prompt: str
+            ):
                 instructions_text = None
                 if grade_index == 0:
                     instructions_text = f"<|system|>\n{CONCEPT1_SYSTEM}<|end|>\n"
@@ -115,21 +118,40 @@ def get_tokenize_function(
                     instructions_text = f"<|system|>\n{CONCEPT4_SYSTEM}<|end|>\n"
                 elif grade_index == 4:
                     instructions_text = f"<|system|>\n{CONCEPT5_SYSTEM}<|end|>\n"
-
-                user_role = f"<|user|>Qual é a nota da redação a seguir?\n\n{essay_example}<|end|>\n"
+                if use_full_context:
+                    user_role = (
+                        f"<|user|>Considere os textos de apoio:\n\n{supporting_text}.\n\n"
+                        f"Agora, o tema da redação é descrito a seguir:\n\n{essay_prompt}\n\n"
+                        f"Com base no tema e nos textos, qual é a nota da redação a seguir?\n\n"
+                        f"{essay_example}<|end|>\n"
+                    )
+                else:
+                    user_role = f"<|user|>Qual é a nota da redação a seguir?\n\n{essay_example}<|end|>\n"
                 assistant_role = "<|assistant|>"
                 instructions_text += user_role
                 instructions_text += assistant_role
                 return instructions_text
 
-            def _prepare_instruction_template(examples: List[str]):
+            def _prepare_instruction_template(
+                essay_text: List[str],
+                supporting_texts: List[str],
+                essay_prompts: List[str],
+            ):
                 result = []
-                for example in examples:
-                    result.append(_prompt_template(example))
+                for example, supporting_text, essay_prompt in zip(
+                    essay_text, supporting_texts, essay_prompts
+                ):
+                    result.append(
+                        _prompt_template(example, supporting_text, essay_prompt)
+                    )
                 return result
 
             return tokenizer(
-                _prepare_instruction_template(examples[text_column]),
+                _prepare_instruction_template(
+                    examples[text_column],
+                    examples["supporting_text"],
+                    examples["prompt"],
+                ),
                 return_tensors="pt",
                 padding=padding,
                 truncation=truncation,
@@ -142,8 +164,10 @@ def get_tokenize_function(
         truncation = False
         padding_side = "left"
 
-        def tokenize_function(examples: List[str]):
-            def _prompt_template(essay_example):
+        def tokenize_function(essay_texts: List[str]):
+            def _prompt_template(
+                essay_example: str, supporting_text: str, essay_prompt: str
+            ):
                 instructions_text = None
                 system_prefix = (
                     "<|begin_of_text|><|start_header_id|>system<|end_header_id|>"
@@ -170,25 +194,44 @@ def get_tokenize_function(
                     instructions_text = (
                         f"{system_prefix}\n\n{CONCEPT5_SYSTEM}{end_of_instruction}\n"
                     )
-                user_role = f"{user_role}\n\nQual é a nota da redação a seguir?\n\n{essay_example}{end_of_instruction}\n"
+                if use_full_context:
+                    user_role = (
+                        f"{user_role}\n\nConsidere os textos de apoio:\n\n{supporting_text}.\n\n"
+                        f"Agora, o tema da redação é descrito a seguir:\n\n{essay_prompt}\n\n"
+                        f"Com base no tema e nos textos, qual é a nota da redação a seguir?\n\n"
+                        f"{essay_example}{end_of_instruction}\n"
+                    )
+                else:
+                    user_role = f"{user_role}\n\nQual é a nota da redação a seguir?\n\n{essay_example}{end_of_instruction}\n"
                 assistant_role = "<|start_header_id|>assistant<|end_header_id|>"
                 instructions_text += user_role
                 instructions_text += assistant_role
                 return instructions_text
 
-            def _prepare_instruction_template(examples: List[str]):
+            def _prepare_instruction_template(
+                essay_texts: List[str],
+                supporting_texts: List[str],
+                essay_prompts: List[str],
+            ):
                 result = []
-                for example in examples:
-                    result.append(_prompt_template(example))
+                for essay, supporting_text, prompt in zip(
+                    essay_texts, supporting_texts, essay_prompts
+                ):
+                    result.append(_prompt_template(essay, supporting_text, prompt))
                 return result
 
             return tokenizer(
-                _prepare_instruction_template(examples[text_column]),
+                _prepare_instruction_template(
+                    essay_texts[text_column],
+                    essay_texts["supporting_text"],
+                    essay_texts["prompt"],
+                ),
                 return_tensors="pt",
                 padding=padding,
                 truncation=truncation,
                 padding_side=padding_side,
             )
+
         tokenizer.pad_token = "<|finetune_right_pad_id|>"
         tokenize_function_def = tokenize_function
     if tokenize_function_def is None:
@@ -196,7 +239,7 @@ def get_tokenize_function(
             "tokenize_function_def should be a function. However, it is being set to None."
         )
     logger.info(
-        f"Tokenizer function parameters- Padding:{padding}; Truncation: {truncation}"
+        f"Tokenizer function parameters- Padding:{padding}; Truncation: {truncation}; Use Full Context: {use_full_context}"
     )
     return tokenize_function_def
 
@@ -208,6 +251,7 @@ def tokenize_dataset(
     grade_index: int,
     model_type: str,
     logger: Logger,
+    use_full_context: bool = False,
 ):
     """
     Tokenize the dataset and process the 'grades' column.
@@ -224,7 +268,7 @@ def tokenize_dataset(
     # Process the 'grades' column
     dataset = dataset.map(lambda x: process_grades(x, grade_index))
     tokenize_function = get_tokenize_function(
-        model_type, tokenizer, text_column, grade_index, logger
+        model_type, tokenizer, text_column, grade_index, logger, use_full_context
     )
     tokenized_dataset = dataset.map(tokenize_function, batched=True)
     return tokenized_dataset
