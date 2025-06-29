@@ -120,8 +120,10 @@ def get_tokenize_function(
                     instructions_text = f"<|system|>\n{CONCEPT5_SYSTEM}<|end|>\n"
                 if use_full_context:
                     user_role = (
-                        f"<|user|>Texto de apoio: {supporting_text}\n\n{essay_prompt}\n\n"
-                        f"Com base nessas informações, qual é a nota da redação a seguir?\n\n{essay_example}<|end|>\n"
+                        f"<|user|>Considere os textos de apoio:\n\n{supporting_text}.\n\n"
+                        f"Agora, o tema da redação é descrito a seguir:\n\n{essay_prompt}\n\n"
+                        f"Com base no tema e nos textos, qual é a nota da redação a seguir?\n\n"
+                        f"{essay_example}<|end|>\n"
                     )
                 else:
                     user_role = f"<|user|>Qual é a nota da redação a seguir?\n\n{essay_example}<|end|>\n"
@@ -194,8 +196,10 @@ def get_tokenize_function(
                     )
                 if use_full_context:
                     user_role = (
-                        f"{user_role}Texto de apoio: {supporting_text}\n\n{essay_prompt}<|end|>\n"
-                        f"Com base nessas informações, qual é a nota da redação a seguir?\n\n{essay_example}{end_of_instruction}\n"
+                        f"{user_role}\n\nConsidere os textos de apoio:\n\n{supporting_text}.\n\n"
+                        f"Agora, o tema da redação é descrito a seguir:\n\n{essay_prompt}\n\n"
+                        f"Com base no tema e nos textos, qual é a nota da redação a seguir?\n\n"
+                        f"{essay_example}{end_of_instruction}\n"
                     )
                 else:
                     user_role = f"{user_role}\n\nQual é a nota da redação a seguir?\n\n{essay_example}{end_of_instruction}\n"
