@@ -83,6 +83,7 @@ def fine_tune_process(cfg: DictConfig, logger: Logger):
     logger.info("Training completed successfully.")
     logger.info("Running on Test")
     evaluate_test = trainer.evaluate(tokenized_dataset["test"])
+    logger.info(f"Test metrics: {evaluate_test}")
     evaluate_test["reference"] = "test_results"
     save_evaluation_results_to_csv(
         experiment_id,

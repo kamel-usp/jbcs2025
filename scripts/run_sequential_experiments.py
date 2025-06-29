@@ -1,4 +1,4 @@
-# python scripts/run_sequential_experiments.py configs/sequential_inference_example.yaml --mode inference
+# python scripts/run_sequential_experiments.py configs/sequential_experiments.yaml --mode inference
 import argparse
 import logging
 import subprocess

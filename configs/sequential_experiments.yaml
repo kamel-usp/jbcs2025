@@ -1,0 +1,12 @@
+# Configuration for running inference experiments sequentially
+# Use this with --mode inference or --mode train
+
+stop_on_failure: true
+delay_between_experiments: 0
+
+experiments:
+  # Example: Run experiments with different models for each grade
+  - name: "bertimbau_base-C1"
+    reference: "base_models/C1"
+  - name: "bertimbau_base-C2"
+    reference: "base_models/C2"
