@@ -1,6 +1,6 @@
 model:
-  name: "neuralmind/bert-base-portuguese-cased"
-  type: "encoder_ordinal_coral"
+  name: "kamel-usp/jbcs2025_bertimbau_base-C1"
+  type: "encoder_classification"
   num_labels: 6
   output_dir: "./results/"
   logging_dir: "./logs/"
