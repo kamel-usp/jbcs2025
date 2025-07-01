@@ -46,6 +46,8 @@ logger = logging.getLogger(__name__)
 
 def get_experiment_id(experiment_config: DictConfig) -> str:
     model_name = experiment_config.experiments.model.name
+    context_type = "essay_only"
+    use_full_context = experiment_config.experiments.dataset.use_full_context
     model_type = None
     if hasattr(experiment_config.experiments.model, "prompt_type"):
         model_type = experiment_config.experiments.model.prompt_type
@@ -53,9 +55,12 @@ def get_experiment_id(experiment_config: DictConfig) -> str:
         model_type = experiment_config.experiments.model.type
         if "/" in model_name:
             model_name = model_name.split("/")[-1]
+    if use_full_context:
+        context_type = "full_context"
     experiment_id = (
         f"{model_name}-{model_type}-"
-        f"C{experiment_config.experiments.dataset.grade_index + 1}"
+        f"C{experiment_config.experiments.dataset.grade_index + 1}-"
+        f"{context_type}"
     )
     return experiment_id
 

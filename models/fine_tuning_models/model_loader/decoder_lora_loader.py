@@ -1,5 +1,4 @@
-
-from peft import LoraConfig, PeftModel, TaskType, get_peft_model
+from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
 from transformers import (
     AutoModelForSequenceClassification,
     Phi3ForSequenceClassification,
@@ -13,10 +12,9 @@ class DecoderModelLoraLoader(BaseModelLoader):
     """Loader for LoRA-based models."""
     
     def load(self) -> PreTrainedModel:
-        checkpoint_path = self.model_cfg.checkpoint_path
-        
-        if checkpoint_path:
-            return self._load_pretrained_peft_model(checkpoint_path)
+        # Check if the model name contains "kamel-usp" to identify fine-tuned models
+        if "kamel-usp" in self.model_cfg.name.lower():
+            return self._load_pretrained_peft_model()
         else:
             return self._initialize_new_peft_model()
     
@@ -61,17 +59,21 @@ class DecoderModelLoraLoader(BaseModelLoader):
         
         return model
     
-    def _load_pretrained_peft_model(self, checkpoint_path: str) -> PeftModel:
-        """Load a pretrained PEFT model from checkpoint."""
+    def _load_pretrained_peft_model(self) -> PeftModel:
+        """Load a pretrained PEFT model from hub."""
+        peft_config = PeftConfig.from_pretrained(self.model_cfg.name)
         base_model_class = self._get_base_model_class()
-        
+        base_model_name = peft_config.base_model_name_or_path
+        self.logger.info(f"Loading PEFT model configuration from {self.model_cfg.name}")
+        self.logger.info(f"Base model name: {base_model_name}")
         base_model = base_model_class.from_pretrained(
-            self.model_cfg.name,
+            base_model_name,
             **self._get_decoder_model_kwargs()
         )
         
-        model = PeftModel.from_pretrained(base_model, checkpoint_path)
-        self.logger.info(f"Loaded fine-tuned PEFT model from {checkpoint_path}")
+        # Load the PEFT model directly from the hub repository
+        model = PeftModel.from_pretrained(base_model, self.model_cfg.name)
+        self.logger.info(f"Loaded fine-tuned PEFT model from {self.model_cfg.name}")
         
         # Set padding token
         model.config.pad_token_id = model.config.eos_token_id

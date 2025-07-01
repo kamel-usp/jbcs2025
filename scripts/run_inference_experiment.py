@@ -111,6 +111,7 @@ def load_model_from_hub(cfg: DictConfig, logger: Logger):
 def compute_bootstrap_confidence_intervals(
     predictions: np.ndarray,
     labels: np.ndarray,
+    dataset_test: Dataset,
     metrics_to_compute: List[str],
     cfg: DictConfig,
     n_bootstrap: int = 1000,
@@ -123,6 +124,7 @@ def compute_bootstrap_confidence_intervals(
     Parameters:
         predictions: Model predictions (can be logits or predicted classes)
         labels: Ground truth labels
+        dataset_test: Test dataset containing reference information
         metrics_to_compute: List of metric names to compute CIs for
         cfg: Configuration object
         n_bootstrap: Number of bootstrap samples
@@ -138,20 +140,63 @@ def compute_bootstrap_confidence_intervals(
     n_samples = len(predictions)
     bootstrap_metrics = {metric: [] for metric in metrics_to_compute}
 
+    # Extract grade_index from config
+    grade_index = cfg.experiments.dataset.grade_index
+
+    # Parse reference field and grades to get grader A and B labels
+    grader_a_labels = []
+    grader_b_labels = []
+    
+    # Get reference and grades fields
+    references = dataset_test["reference"]
+    all_grades = dataset_test["grades"]  # This should contain the grades array for each essay
+    
+    for i in range(len(references)):
+        ref = references[i]
+        grades = all_grades[i]
+        
+        # The grades array contains 6 values: [grader_a scores for C1-C5, total_grader_a]
+        # For grader_a: indices 0-4 are C1-C5 scores
+        # For grader_b: we need to get this from somewhere else or use the same structure
+        
+        if ref == "grader_a":
+            # Use grader_a's score for the specified grade_index
+            grader_a_labels.append(grades[grade_index])
+            # For grader_b, we need to use the actual label from the dataset
+            # which should be the consensus or the other grader's score
+            grader_b_labels.append(labels[i])
+        elif ref == "grader_b":
+            # Use the label as grader_b's score
+            grader_b_labels.append(labels[i])
+            # Use grader_a's score from grades array
+            grader_a_labels.append(grades[grade_index])
+        else:
+            raise ValueError(
+                f"Unexpected reference value: {ref}. Expected 'grader_a' or 'grader_b'."
+            )
+
+    grader_a_labels = np.array(grader_a_labels)
+    grader_b_labels = np.array(grader_b_labels)
+
     # Perform bootstrap sampling
     for _ in tqdm(range(n_bootstrap), desc="Performing Bootstrap samples"):
         # Sample with replacement
         indices = np.random.choice(n_samples, size=n_samples, replace=True)
         boot_predictions = predictions[indices]
-        boot_labels = labels[indices]
+        boot_labels_a = grader_a_labels[indices]
+        boot_labels_b = grader_b_labels[indices]
 
-        # Compute metrics for this bootstrap sample
-        boot_metrics = compute_metrics((boot_predictions, boot_labels), cfg)
+        # Compute metrics for grader A
+        metrics_a = compute_metrics((boot_predictions, boot_labels_a), cfg)
 
-        # Store only the requested metrics
+        # Compute metrics for grader B
+        metrics_b = compute_metrics((boot_predictions, boot_labels_b), cfg)
+
+        # Average metrics from both graders
         for metric in metrics_to_compute:
-            if metric in boot_metrics:
-                bootstrap_metrics[metric].append(boot_metrics[metric])
+            if metric in metrics_a and metric in metrics_b:
+                avg_metric = (metrics_a[metric] + metrics_b[metric]) / 2.0
+                bootstrap_metrics[metric].append(avg_metric)
 
     # Calculate confidence intervals
     alpha = 1 - confidence_level
@@ -225,10 +270,10 @@ def save_bootstrap_ci_to_csv(
 
 def hf_model_inference(
     cfg: DictConfig, logger: Logger
-) -> Tuple[Dict[str, float], np.ndarray, np.ndarray]:
+) -> Tuple[Dict[str, float], np.ndarray, np.ndarray, Dataset]:
     """
     Run inference with a Hugging Face model loaded from the hub.
-    Returns metrics and raw predictions/labels for CI computation.
+    Returns metrics, raw predictions/labels, and test dataset for CI computation.
     """
     # Load dataset
     dataset = load_dataset(
@@ -299,7 +344,7 @@ def hf_model_inference(
         experiment_id=get_experiment_id(cfg),
     )
 
-    return metrics, logits, labels
+    return metrics, logits, labels, dataset["test"]
 
 
 def run_inference(cfg: DictConfig, logger: Logger):
@@ -315,15 +360,15 @@ def run_inference(cfg: DictConfig, logger: Logger):
         ModelTypesEnum.PHI4_CLASSIFICATION_LORA.value,
     ]:
         logger.info("Running inference with fine-tuned HF model")
-        metrics, predictions, labels = hf_model_inference(cfg, logger)
+        metrics, predictions, labels, dataset_test = hf_model_inference(cfg, logger)
     elif cfg.experiments.model.type in [
         ModelTypesEnum.CHATGPT_4O.value,
         ModelTypesEnum.MARITACA_SABIA.value,
         ModelTypesEnum.DEEPSEEK_R1.value,
     ]:
         logger.info("Running inference with API model")
-        # Note: api_inference_pipeline needs to be modified to return predictions and labels
-        metrics, predictions, labels = api_inference_pipeline(cfg, logger)
+        # Note: api_inference_pipeline needs to be modified to return predictions, labels, and dataset
+        metrics, predictions, labels, dataset_test = api_inference_pipeline(cfg, logger)
     else:
         raise ValueError(f"Unsupported model type: {cfg.experiments.model.type}")
 
@@ -346,6 +391,7 @@ def run_inference(cfg: DictConfig, logger: Logger):
         ci_results = compute_bootstrap_confidence_intervals(
             predictions=predictions,
             labels=labels,
+            dataset_test=dataset_test,
             metrics_to_compute=metrics_for_ci,
             cfg=cfg,
             n_bootstrap=n_bootstrap,
