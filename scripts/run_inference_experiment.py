@@ -137,6 +137,7 @@ def compute_bootstrap_confidence_intervals(
     if random_state is not None:
         np.random.seed(random_state)
 
+
     n_samples = len(predictions)
     bootstrap_metrics = {metric: [] for metric in metrics_to_compute}
 
@@ -367,7 +368,6 @@ def run_inference(cfg: DictConfig, logger: Logger):
         ModelTypesEnum.DEEPSEEK_R1.value,
     ]:
         logger.info("Running inference with API model")
-        # Note: api_inference_pipeline needs to be modified to return predictions, labels, and dataset
         metrics, predictions, labels, dataset_test = api_inference_pipeline(cfg, logger)
     else:
         raise ValueError(f"Unsupported model type: {cfg.experiments.model.type}")
