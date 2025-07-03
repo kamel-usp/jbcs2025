@@ -1,11 +1,13 @@
 import asyncio
 import json
 import re
+import math
 from collections import Counter
 from dataclasses import dataclass
 from logging import Logger
 from typing import Dict, List
 
+import numpy as np
 import openai
 from datasets import (
     Dataset,
@@ -13,7 +15,7 @@ from datasets import (
 )
 from omegaconf import DictConfig
 from pydantic import ValidationError
-from tqdm.auto import tqdm
+from tqdm.asyncio import tqdm_asyncio
 
 from metrics.metrics import compute_metrics
 from models.api_models.open_ai_api import Competencia
@@ -27,8 +29,9 @@ from scripts.constants.prompts.sabia_model import (
     CONCEPT5_SYSTEM,
 )
 
-CONCURRENCY_LIMIT = 10
-EXPONENTIAL_BACKOFF_DELAY = 120
+CONCURRENCY_LIMIT = 50 
+EXPONENTIAL_BACKOFF_DELAY = 30
+REQUEST_TIMEOUT = 300
 
 
 @dataclass
@@ -71,17 +74,27 @@ async def get_completion_with_retry(
     messages: list[dict],
     number_of_calls_per_model: int,
     experiment_config,
+    logger: Logger,
+    line_id: int = -1,
     max_retries: int = 5,
 ) -> AggregatedCompetencia | AggregatedReasoningCompetencia:
     api_retries = 0
-    while True:
+    responses = []  # Move outside retry loop to preserve successful responses
+    successful_calls = 0  # Track successful calls separately
+    
+    while successful_calls < number_of_calls_per_model:
         try:
-            responses = []
             if experiment_config.experiments.model.type in [
                 ModelTypesEnum.CHATGPT_4O.value,
                 ModelTypesEnum.MARITACA_SABIA.value,
             ]:
-                for _ in range(number_of_calls_per_model):
+                # Early consensus optimization
+                early_consensus_threshold = max(1, math.ceil(number_of_calls_per_model / 2))
+                score_counts = Counter()
+                
+                # Continue from where we left off
+                for call_num in range(successful_calls, number_of_calls_per_model):
+                    logger.info(f"[Line {line_id}] Making API call {call_num + 1}/{number_of_calls_per_model} to {model_name}")
                     completion = await client.beta.chat.completions.parse(
                         model=model_name,
                         messages=messages,
@@ -89,9 +102,19 @@ async def get_completion_with_retry(
                         max_tokens=experiment_config.experiments.model.max_tokens,
                         temperature=experiment_config.experiments.model.temperature,
                         seed=experiment_config.experiments.model.seed,
+                        timeout=REQUEST_TIMEOUT
                     )
-                    # Append the parsed response from the first choice.
-                    responses.append(completion.choices[0].message.parsed)
+                    response = completion.choices[0].message.parsed
+                    responses.append(response)
+                    successful_calls += 1
+                    score_counts[response.pontuacao] += 1
+                    
+                    # Check for early consensus
+                    if any(count >= early_consensus_threshold for count in score_counts.values()):
+                        logger.info(f"[Line {line_id}] Early consensus reached after {successful_calls} calls")
+                        break
+                
+                # If we reach here, all calls were successful
                 essay_scores = [resp.pontuacao for resp in responses]
                 explanations = [resp.justificativa for resp in responses]
                 if essay_scores:
@@ -100,18 +123,23 @@ async def get_completion_with_retry(
                     pontuacao=most_common_score, justificativa=explanations
                 )
                 return final_answer
+                
             if experiment_config.experiments.model.type in [
                 ModelTypesEnum.DEEPSEEK_R1.value
             ]:
-                successful_responses = 0
                 parsing_retries = 0
-                while successful_responses < number_of_calls_per_model:
+                score_counts = Counter()
+                early_consensus_threshold = max(1, math.ceil(number_of_calls_per_model / 2))
+                
+                while successful_calls < number_of_calls_per_model:
                     try:
+                        logger.info(f"[Line {line_id}] Making API call {successful_calls + 1}/{number_of_calls_per_model} to {model_name}")
                         completion = await client.chat.completions.create(
                             model=model_name,
                             messages=messages,
                             stop=list(experiment_config.experiments.model.stop),
                             stream=False,
+                            timeout=REQUEST_TIMEOUT,
                         )
                         think_text = completion.choices[0].message.reasoning_content
                         content = completion.choices[0].message.content
@@ -124,21 +152,27 @@ async def get_completion_with_retry(
                             thinking=think_text, competencia=evaluation
                         )
                         responses.append(answer)
-                        successful_responses += 1
+                        successful_calls += 1
                         parsing_retries = 0  # Reset parsing retries after success
+                        
+                        # Track scores for early consensus
+                        score_counts[evaluation.pontuacao] += 1
+                        if any(count >= early_consensus_threshold for count in score_counts.values()):
+                            logger.info(f"[Line {line_id}] Early consensus reached after {successful_calls} calls")
+                            break
 
                     except ValueError as parse_error:
                         # For JSON parsing errors, use a separate retry counter
                         parsing_retries += 1
                         wait_time = (2**parsing_retries) * EXPONENTIAL_BACKOFF_DELAY
-                        print(
-                            f"JSON parsing error: {parse_error}. "
+                        logger.warning(
+                            f"[Line {line_id}] JSON parsing error: {parse_error}. "
                             f"Parsing retry #{parsing_retries} in {wait_time} seconds..."
                         )
                         await asyncio.sleep(wait_time)
                         continue
 
-                # Only reach this point when we have all required responses
+                # Only reach this point when we have enough valid responses
                 essay_scores = [resp.competencia.pontuacao for resp in responses]
                 explanations = [resp.competencia.justificativa for resp in responses]
                 thinking_list = [resp.thinking for resp in responses]
@@ -154,11 +188,12 @@ async def get_completion_with_retry(
         except Exception as e:
             # For non-parsing errors (API issues, network problems, etc.)
             if api_retries >= max_retries:
+                logger.error(f"[Line {line_id}] API error after {max_retries} retries: {str(e)}. Giving up.")
                 raise e
             api_retries += 1
             wait_time = (2**api_retries) * EXPONENTIAL_BACKOFF_DELAY
-            print(
-                f"API error occurred: {str(e)}. API retry #{api_retries}/{max_retries} in {wait_time} seconds..."
+            logger.warning(
+                f"[Line {line_id}] API error occurred: {str(e)}. API retry #{api_retries}/{max_retries} in {wait_time} seconds..."
             )
             await asyncio.sleep(wait_time)
 
@@ -170,6 +205,8 @@ async def get_completion(
     experiment_config: DictConfig,
     number_repetition_eval: int,
     semaphore: asyncio.Semaphore,
+    logger: Logger,
+    line_id: int = -1,
 ) -> AggregatedReasoningCompetencia | AggregatedCompetencia:
     async with semaphore:
         return await get_completion_with_retry(
@@ -178,6 +215,8 @@ async def get_completion(
             messages=messages,
             experiment_config=experiment_config,
             number_of_calls_per_model=number_repetition_eval,
+            logger=logger,
+            line_id=line_id,
         )
 
 
@@ -192,7 +231,8 @@ async def get_all_completions(
     processed_dataset: list[list[dict]],
     experiment_config,
     number_repetition_eval,
-    concurrency_limit: int = 5,
+    logger: Logger,
+    concurrency_limit: int = CONCURRENCY_LIMIT,  # Use the increased limit
 ) -> List[AggregatedCompetencia | AggregatedReasoningCompetencia]:
     semaphore = asyncio.Semaphore(concurrency_limit)
 
@@ -205,15 +245,17 @@ async def get_all_completions(
             experiment_config=experiment_config,
             semaphore=semaphore,
             number_repetition_eval=number_repetition_eval,
+            logger=logger,
+            line_id=idx,
         )
-        for current_prompt in processed_dataset
+        for idx, current_prompt in enumerate(processed_dataset)
     ]
 
-    # Wrap each task to update the progress bar upon completion.
-    with tqdm(total=len(tasks)) as pbar:
-        wrapped_tasks = [run_with_progress(task, pbar) for task in tasks]
-        # asyncio.gather preserves the order of tasks
-        ordered_results = await asyncio.gather(*wrapped_tasks)
+    ordered_results = await tqdm_asyncio.gather(
+        *tasks,
+        desc="Processing completions",
+        total=len(tasks)
+    )
 
     return ordered_results
 
@@ -235,12 +277,11 @@ def _prompt_template(example: dict, grade_index: int, experiment_config: DictCon
             instructions_text = {"role": "system", "content": CONCEPT4_SYSTEM}
         elif grade_index == 4:
             instructions_text = {"role": "system", "content": CONCEPT5_SYSTEM}
-        if experiment_config.experiments.model.use_essay_prompt is False:
-            user_text = {
-                "role": "user",
-                "content": f"Qual é a nota da redação a seguir?\n\n{example['essay_text']}",
-            }
-        elif experiment_config.experiments.model.use_essay_prompt is True:
+        user_text = {
+            "role": "user",
+            "content": f"Qual é a nota da redação a seguir?\n\n{example['essay_text']}",
+        }
+        if experiment_config.experiments.dataset.use_full_context is True:
             user_text = {
                 "role": "user",
                 "content": (
@@ -266,6 +307,16 @@ def _prompt_template(example: dict, grade_index: int, experiment_config: DictCon
             "role": "user",
             "content": f"{instructions_text}\n\nQual é a nota da redação a seguir?\n\n{example['essay_text']}",
         }
+        if experiment_config.experiments.dataset.use_full_context is True:
+            user_text = {
+                "role": "user",
+                "content": (
+                    f"{instructions_text}\n\nConsidere os textos de apoio:\n\n{example['supporting_text']}.\n\n"
+                    f"Agora, o tema da redação é descrito a seguir:\n\n{example['prompt']}\n\n"
+                    f"Com base no tema e nos textos, qual é a nota da redação a seguir?\n\n"
+                    f"{example['essay_text']}"
+                ),
+            }
         return [user_text]
 
 
@@ -360,6 +411,7 @@ def api_inference_pipeline(
             model,
             processed_dataset,
             experiment_config,
+            logger=logger,
             concurrency_limit=CONCURRENCY_LIMIT,
             number_repetition_eval=experiment_config.experiments.model.number_repetition_eval,
         )
@@ -378,5 +430,11 @@ def api_inference_pipeline(
         logger=logger,
         experiment_id=experiment_id,
     )
-    predictions = [row.pontuacao for row in all_results]
-    return compute_metrics((predictions, labels), experiment_config)
+    predictions = np.array([row.pontuacao for row in all_results])
+    labels = np.array(labels)
+    return (
+        compute_metrics((predictions, labels), experiment_config),
+        predictions,
+        labels,
+        test_set,
+    )
