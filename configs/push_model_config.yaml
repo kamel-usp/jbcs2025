@@ -1,14 +1,6 @@
-# Configuration for pushing trained models to Hugging Face Hub
-# This file is used by scripts/push_model_to_hub.py
-
-# Model push configuration
 model_push:
-  # Path to the trained model directory (output from run_experiment.py)
-  # This directory should contain run_experiment.log and evaluation_results.csv
-  model_path: "/workspace/jbcs2025/outputs/2025-06-30/phi-4-phi4_classification_lora-C4-full_context"
-  # Organization name on Hugging Face Hub
-  organization: "kamel-usp"
-  # Collection details
+  model_path: /workspace/jbcs2025/outputs/2025-07-06/phi-4-phi4_classification_lora-C5-full_context-r16
+  organization: kamel-usp
   collection:
-    name: "JBCS2025"
-    slug: "kamel-usp/jbcs2025-67d5e73a4b89c1f0c878159c"
+    name: JBCS2025
+    slug: kamel-usp/jbcs2025-67d5e73a4b89c1f0c878159c

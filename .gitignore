@@ -12,8 +12,11 @@ uv.lock
 
 #logs
 outputs/**/*
+inference_output/**/*
 .vscode/launch.json
 .api_keys.yaml
 studies/test_trainer/*
 .env
 sequential_experiments.log
+batch_inference_from_hub.log
+batch_push_models.log
