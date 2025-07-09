@@ -62,6 +62,8 @@ def get_experiment_id(experiment_config: DictConfig) -> str:
         f"C{experiment_config.experiments.dataset.grade_index + 1}-"
         f"{context_type}"
     )
+    if hasattr(experiment_config.experiments.model, "lora_r"):
+        experiment_id += f"-r{experiment_config.experiments.model.lora_r}"
     return experiment_id
 
 
