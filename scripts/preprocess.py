@@ -3,8 +3,14 @@ from logging import Logger
 from pathlib import Path
 from typing import List
 
+import numpy as np
 from datasets import DatasetDict
-from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
+from transformers import (
+    AutoConfig,
+    AutoTokenizer,
+    PreTrainedTokenizer,
+    PreTrainedTokenizerFast,
+)
 
 # Append the parent directory to sys.path using pathlib
 parent_dir = Path(__file__).resolve().parent.parent
@@ -45,7 +51,12 @@ def load_tokenizer(model_type: str, model_name: str, cache_dir: str):
             cache_dir=cache_dir,
             pad_token="<|finetune_right_pad_id|>",
         )
-    return AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
+    model_config = AutoConfig.from_pretrained(model_name, cache_dir=cache_dir)
+    return AutoTokenizer.from_pretrained(
+        model_name,
+        cache_dir=cache_dir,
+        model_max_length=model_config.max_position_embeddings,
+    )
 
 
 def process_grades(example, grade_index: int):
@@ -79,19 +90,28 @@ def get_tokenize_function(
     tokenize_function_def = None
     model_config = ModelConfig.from_model_type(model_type)
     if model_config.architecture == ModelArchitecture.ENCODER:
-        padding = "max_length"
+        padding = "longest"
         truncation = True
         padding_side = "right"
-        max_length = 512
-
-        def tokenize_function(examples: List[str]):
-            return tokenizer(
-                examples[text_column],
-                padding=padding,
-                truncation=truncation,
-                padding_side=padding_side,
-                max_length=max_length,
-            )
+        if use_full_context:
+            def tokenize_function(examples: List[str]):
+                combined = [support + " " + prompt for support, prompt in zip(examples["supporting_text"], examples["prompt"])]
+                return tokenizer(
+                    combined,
+                    examples[text_column],
+                    padding=padding,
+                    truncation=truncation,
+                    padding_side=padding_side,
+                )
+        else:
+            def tokenize_function(examples: List[str]):
+                return tokenizer(
+                    examples[text_column],
+                    padding=padding,
+                    truncation=truncation,
+                    padding_side=padding_side,
+                )
+        
 
         tokenize_function_def = tokenize_function
 
@@ -244,6 +264,54 @@ def get_tokenize_function(
     return tokenize_function_def
 
 
+def compute_token_statistics(
+    tokenized_dataset: DatasetDict,
+    logger: Logger,
+    tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
+):
+    """
+    Compute statistics on the number of tokens in the tokenized dataset.
+
+    Args:
+        tokenized_dataset (DatasetDict): The tokenized dataset.
+        logger (Logger): Logger instance for outputting statistics.
+        tokenizer (PreTrainedTokenizer | PreTrainedTokenizerFast): Tokenizer containing max length info.
+
+    Returns:
+        dict: Dictionary containing statistics for each split.
+    """
+    statistics = {}
+
+    for split_name, split_dataset in tokenized_dataset.items():
+        # Get token lengths - works for both input_ids and attention_mask
+        token_lengths = []
+
+        for example in split_dataset:
+            if "input_ids" in example:
+                token_lengths.append(len(example["input_ids"]))
+
+        if token_lengths:
+            stats = {
+                "min": int(np.min(token_lengths)),
+                "max": int(np.max(token_lengths)),
+                "avg": float(np.mean(token_lengths)),
+                "std": float(np.std(token_lengths)),
+                "total_examples": len(token_lengths),
+            }
+            statistics[split_name] = stats
+
+            # Log the statistics
+            logger.info(f"\nToken statistics for '{split_name}' split:")
+            logger.info(f"  Total examples: {stats['total_examples']}")
+            logger.info(f"  Min tokens: {stats['min']}")
+            logger.info(f"  Max tokens: {stats['max']}")
+            logger.info(f"  Avg tokens: {stats['avg']:.2f}")
+            logger.info(f"  Std tokens: {stats['std']:.2f}")
+    logger.info("If token statistics are the same (max, avg, min) keep in mind that this is due to batched tokenization and padding.")
+    logger.info(f"Model max length: {tokenizer.model_max_length}. If it is the same as stats, then there is a high chance that sequences are being truncated.")
+    return statistics
+
+
 def tokenize_dataset(
     dataset: DatasetDict,
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
@@ -271,4 +339,8 @@ def tokenize_dataset(
         model_type, tokenizer, text_column, grade_index, logger, use_full_context
     )
     tokenized_dataset = dataset.map(tokenize_function, batched=True)
+
+    # Compute and log token statistics
+    compute_token_statistics(tokenized_dataset, logger, tokenizer)
+
     return tokenized_dataset
