@@ -15,11 +15,19 @@ def generate_model_list() -> List[str]:
     Returns:
         List of model IDs
     """
-    # Define the base model prefixes
-    model_prefixes = [
+    # Define the base model prefixes for LoRA models
+    lora_model_prefixes = [
         "kamel-usp/jbcs2025_Llama-3.1-8B-llama31_classification_lora",
         "kamel-usp/jbcs2025_phi-4-phi4_classification_lora",
         "kamel-usp/jbcs2025_Phi-3.5-mini-instruct-phi35_classification_lora"
+    ]
+    
+    # Define the encoder model prefixes
+    encoder_model_prefixes = [
+        "kamel-usp/jbcs2025_bert-base-portuguese-cased-encoder_classification",
+        "kamel-usp/jbcs2025_bert-base-multilingual-cased-encoder_classification",
+        "kamel-usp/jbcs2025_BERTugues-base-portuguese-cased-encoder_classification",
+        "kamel-usp/jbcs2025_bert-large-portuguese-cased-encoder_classification"
     ]
     
     # Define the concepts
@@ -34,13 +42,24 @@ def generate_model_list() -> List[str]:
     # Generate all combinations
     model_ids = []
     
-    for model_prefix in model_prefixes:
+    # Generate LoRA model combinations
+    for model_prefix in lora_model_prefixes:
         for concept in concepts:
             for context in contexts:
                 for lora_rank in lora_ranks:
                     # Build the model ID
                     model_id = f"{model_prefix}-{concept}-{context}-{lora_rank}"
                     model_ids.append(model_id)
+    
+    # Generate encoder model combinations (no LoRA ranks)
+    for model_prefix in encoder_model_prefixes:
+        for concept in concepts:
+            for context in contexts:
+                if context == "full_context":
+                    continue # Skip full context for encoder models
+                # Build the model ID
+                model_id = f"{model_prefix}-{concept}-{context}"
+                model_ids.append(model_id)
     
     return model_ids
 
@@ -71,6 +90,14 @@ def write_models_file(output_path: Path, model_ids: List[str]) -> None:
                 model_type = "Phi-4"
             elif "Phi-3.5-mini-instruct" in model_id:
                 model_type = "Phi-3.5"
+            elif "bert-base-portuguese-cased-encoder" in model_id:
+                model_type = "BERT Base Portuguese"
+            elif "bert-base-multilingual-cased-encoder" in model_id:
+                model_type = "BERT Base Multilingual"
+            elif "BERTugues-base-portuguese-cased-encoder" in model_id:
+                model_type = "BERTugues Base Portuguese"
+            elif "bert-large-portuguese-cased-encoder" in model_id:
+                model_type = "BERT Large Portuguese"
             else:
                 model_type = "Unknown"
             
@@ -95,8 +122,8 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        default="configs/hub_models_list_all.txt",
-        help="Output file path (default: configs/hub_models_list_all.txt)",
+        default="configs/hub_models_list.txt",
+        help="Output file path (default: configs/hub_models_list.txt)",
     )
     parser.add_argument(
         "--dry-run",
@@ -124,8 +151,10 @@ def main():
         # Print some statistics
         print(f"\nStatistics:")
         print(f"  Total models: {len(model_ids)}")
-        print(f"  Models per type: {len(model_ids) // 3}")
-        print(f"  Combinations per model: {len(model_ids) // 3}")
+        print(f"  LoRA models: {3 * 5 * 2 * 2}")  # 3 models * 5 concepts * 2 contexts * 2 ranks
+        print(f"  Encoder models: {4 * 5 * 2}")   # 4 models * 5 concepts * 2 contexts
+        print(f"  Combinations per LoRA model: {5 * 2 * 2}")
+        print(f"  Combinations per encoder model: {5 * 2}")
 
 
 if __name__ == "__main__":

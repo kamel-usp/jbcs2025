@@ -65,10 +65,8 @@ def save_model_predictions_jsonl(
     ids = dataset_test["id"]
     id_prompts = dataset_test["id_prompt"]
     test_essays = dataset_test["essay_text"]
-    reference = (
-        dataset_test["reference"] if "reference" in dataset_test else ["" for _ in ids]
-    )
-
+    reference = dataset_test["reference"]
+    
     rows = []
     for idx, essay in enumerate(test_essays):
         row = {
