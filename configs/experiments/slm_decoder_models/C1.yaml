@@ -1,6 +1,6 @@
 model:
-  name: "microsoft/Phi-3.5-mini-instruct"
-  type: "phi35_classification_lora"
+  name: "TucanoBR/Tucano-2b4-Instruct"
+  type: "tucano_classification_lora"
   num_labels: 6
   output_dir: "./results/"
   logging_dir: "./logs/"
@@ -13,16 +13,17 @@ model:
   checkpoint_path: ""
 
 tokenizer:
-  name: "microsoft/Phi-3.5-mini-instruct"
+  name: "TucanoBR/Tucano-2b4-Instruct"
 
 dataset:
   grade_index: 0
+  use_full_context: False 
 
 training_params:
   weight_decay: 0.01
   warmup_ratio: 0.1
   learning_rate: 5e-5
-  train_batch_size: 2
+  train_batch_size: 8
   eval_batch_size: 4
-  gradient_accumulation_steps: 8
-  gradient_checkpointing: False
+  gradient_accumulation_steps: 2
+  gradient_checkpointing: True

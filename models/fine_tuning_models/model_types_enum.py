@@ -11,6 +11,7 @@ class ModelArchitecture(Enum):
     PHI35 = "phi35"
     PHI4 = "phi4"
     LLAMA31 = "llama31"
+    TUCANO = "tucano"
     
 class ModelTypesEnum(Enum):
     # Standard classification models
@@ -18,6 +19,7 @@ class ModelTypesEnum(Enum):
     PHI35_CLASSIFICATION_LORA = "phi35_classification_lora"
     PHI4_CLASSIFICATION_LORA = "phi4_classification_lora"
     LLAMA31_CLASSIFICATION_LORA = "llama31_classification_lora"
+    TUCANO_CLASSIFICATION_LORA = "tucano_classification_lora"
     
     # Ordinal regression models - CORAL
     ENCODER_ORDINAL_CORAL = "encoder_ordinal_coral"

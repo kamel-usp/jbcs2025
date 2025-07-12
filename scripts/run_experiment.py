@@ -152,6 +152,7 @@ def main(cfg: DictConfig):
         ModelArchitecture.PHI35,
         ModelArchitecture.PHI4,
         ModelArchitecture.LLAMA31,
+        ModelArchitecture.TUCANO,
     ]:
         logger.info("Starting the Fine Tuning training process.")
         experiment_id = fine_tune_process(cfg, logger)

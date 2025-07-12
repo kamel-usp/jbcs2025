@@ -73,6 +73,7 @@ def create_model_card(experiment_cfg: DictConfig, model_dir: Path, logger: loggi
         ModelTypesEnum.LLAMA31_CLASSIFICATION_LORA.value,
         ModelTypesEnum.PHI35_CLASSIFICATION_LORA.value,
         ModelTypesEnum.PHI4_CLASSIFICATION_LORA.value,
+        ModelTypesEnum.TUCANO_CLASSIFICATION_LORA.value,
     ]:
         main_library = "peft"
     columns_to_use = [

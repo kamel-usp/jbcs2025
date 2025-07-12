@@ -51,6 +51,13 @@ def load_tokenizer(model_type: str, model_name: str, cache_dir: str):
             cache_dir=cache_dir,
             pad_token="<|finetune_right_pad_id|>",
         )
+    if model_type == ModelTypesEnum.TUCANO_CLASSIFICATION_LORA.value:
+        return AutoTokenizer.from_pretrained(
+            model_name,
+            cache_dir=cache_dir,
+            pad_token="<pad>",
+            trust_remote_code=True,
+        )
     model_config = AutoConfig.from_pretrained(model_name, cache_dir=cache_dir)
     return AutoTokenizer.from_pretrained(
         model_name,
@@ -226,6 +233,75 @@ def get_tokenize_function(
                 assistant_role = "<|start_header_id|>assistant<|end_header_id|>"
                 instructions_text += user_role
                 instructions_text += assistant_role
+                return instructions_text
+
+            def _prepare_instruction_template(
+                essay_texts: List[str],
+                supporting_texts: List[str],
+                essay_prompts: List[str],
+            ):
+                result = []
+                for essay, supporting_text, prompt in zip(
+                    essay_texts, supporting_texts, essay_prompts
+                ):
+                    result.append(_prompt_template(essay, supporting_text, prompt))
+                return result
+
+            return tokenizer(
+                _prepare_instruction_template(
+                    essay_texts[text_column],
+                    essay_texts["supporting_text"],
+                    essay_texts["prompt"],
+                ),
+                return_tensors="pt",
+                padding=padding,
+                truncation=truncation,
+                padding_side=padding_side,
+            )
+
+        tokenizer.pad_token = "<|finetune_right_pad_id|>"
+        tokenize_function_def = tokenize_function
+    if model_config.architecture in [ModelArchitecture.TUCANO]:
+        padding = "longest"
+        truncation = False
+        padding_side = "left"
+
+        def tokenize_function(essay_texts: List[str]):
+            def _prompt_template(
+                essay_example: str, supporting_text: str, essay_prompt: str
+            ):
+                begin_of_instruction = "<instruction>"
+                end_of_instruction = "</instruction>"
+                if grade_index == 0:
+                    instructions_text = (
+                        f"{begin_of_instruction}\n\n{CONCEPT1_SYSTEM}\n\n"
+                    )
+                elif grade_index == 1:
+                    instructions_text = (
+                        f"{begin_of_instruction}\n\n{CONCEPT2_SYSTEM}\n\n"
+                    )
+                elif grade_index == 2:
+                    instructions_text = (
+                        f"{begin_of_instruction}\n\n{CONCEPT3_SYSTEM}\n\n"
+                    )
+                elif grade_index == 3:
+                    instructions_text = (
+                        f"{begin_of_instruction}\n\n{CONCEPT4_SYSTEM}\n\n"
+                    )
+                elif grade_index == 4:
+                    instructions_text = (
+                        f"{begin_of_instruction}\n\n{CONCEPT4_SYSTEM}\n\n"
+                    )
+                if use_full_context:
+                    user_role = (
+                        f"Considere os textos de apoio:\n\n{supporting_text}.\n\n"
+                        f"Agora, o tema da redação é descrito a seguir:\n\n{essay_prompt}\n\n"
+                        f"Com base no tema e nos textos, qual é a nota da redação a seguir?\n\n"
+                        f"{essay_example}{end_of_instruction}\n"
+                    )
+                else:
+                    user_role = f"Qual é a nota da redação a seguir?\n\n{essay_example}{end_of_instruction}\n"
+                instructions_text += user_role
                 return instructions_text
 
             def _prepare_instruction_template(

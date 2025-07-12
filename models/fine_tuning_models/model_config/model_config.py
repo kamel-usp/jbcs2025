@@ -30,6 +30,8 @@ class ModelConfig:
             architecture = ModelArchitecture.PHI4
         elif "LLAMA31" in model_type_upper:
             architecture = ModelArchitecture.LLAMA31
+        elif "TUCANO" in model_type_upper:
+            architecture = ModelArchitecture.TUCANO
         else:
             raise ValueError(f"Unknown architecture in model type: {model_type}")
         

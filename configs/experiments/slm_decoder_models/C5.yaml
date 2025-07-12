@@ -1,28 +1,29 @@
 model:
-  name: "meta-llama/Llama-3.1-8B"
-  type: "llama31_classification_lora"
+  name: "TucanoBR/Tucano-2b4-Instruct"
+  type: "tucano_classification_lora"
   num_labels: 6
-  output_dir: "./results/llama31-8b-balanced/C5"
-  logging_dir: "./logs/llama31-8b-balanced/C5"
-  best_model_dir: "./results/llama31-8b-balanced/C5/best_model"
+  output_dir: "./results/"
+  logging_dir: "./logs/"
+  best_model_dir: "./results/best_model"
   lora_r: 8
   lora_dropout: 0.05
   lora_alpha: 16
   lora_target_modules: "all-linear"
-  # Empty string for new training, or path like "kamel-usp/jbcs2025_phi35-balanced-C5" for loading pre trained
-  checkpoint_path: "kamel-usp/jbcs2025_llama31_8b-balanced-C5"
+  # Empty string for new training, or path like "kamel-usp/jbcs2025_phi35-balanced-C3" for loading pre trained
+  checkpoint_path: ""
 
 tokenizer:
-  name: "meta-llama/Llama-3.1-8B"
+  name: "TucanoBR/Tucano-2b4-Instruct"
   
 dataset:
   grade_index: 4
+  use_full_context: False
 
 training_params:
   weight_decay: 0.01
   warmup_ratio: 0.1
   learning_rate: 5e-5
-  train_batch_size: 2
+  train_batch_size: 8
   eval_batch_size: 4
-  gradient_accumulation_steps: 8
-  gradient_checkpointing: False
+  gradient_accumulation_steps: 2
+  gradient_checkpointing: True
