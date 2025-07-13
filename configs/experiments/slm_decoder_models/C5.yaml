@@ -5,9 +5,9 @@ model:
   output_dir: "./results/"
   logging_dir: "./logs/"
   best_model_dir: "./results/best_model"
-  lora_r: 8
-  lora_dropout: 0.05
-  lora_alpha: 16
+  lora_r: 16
+  lora_dropout: 0.1
+  lora_alpha: 32
   lora_target_modules: "all-linear"
   # Empty string for new training, or path like "kamel-usp/jbcs2025_phi35-balanced-C3" for loading pre trained
   checkpoint_path: ""
@@ -17,7 +17,7 @@ tokenizer:
   
 dataset:
   grade_index: 4
-  use_full_context: False
+  use_full_context: True 
 
 training_params:
   weight_decay: 0.01

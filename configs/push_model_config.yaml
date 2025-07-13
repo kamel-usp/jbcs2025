@@ -1,5 +1,5 @@
 model_push:
-  model_path: /workspace/jbcs2025/outputs/2025-07-06/phi-4-phi4_classification_lora-C5-full_context-r16
+  model_path: /workspace/jbcs2025/outputs/2025-07-12/Tucano-2b4-Instruct-tucano_classification_lora-C5-full_context-r16
   organization: kamel-usp
   collection:
     name: JBCS2025

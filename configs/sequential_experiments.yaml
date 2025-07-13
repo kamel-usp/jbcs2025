@@ -10,8 +10,6 @@ experiments:
     reference: "slm_decoder_models/C1"
   - name: "tucano/C2"
     reference: "slm_decoder_models/C2"
-  - name: "tucano/C3"
-    reference: "slm_ecoder_models/C3"
   - name: "tucano/C4"
     reference: "slm_decoder_models/C4"
   - name: "tucano/C5"
