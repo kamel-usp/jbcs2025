@@ -1,6 +1,6 @@
 model:
-  name: "TucanoBR/Tucano-2b4-Instruct"
-  type: "tucano_classification_lora"
+  name: "PORTULAN/gervasio-8b-portuguese-ptpt-decoder"
+  type: "llama31_classification_lora"
   num_labels: 6
   output_dir: "./results/"
   logging_dir: "./logs/"
@@ -13,7 +13,7 @@ model:
   checkpoint_path: ""
 
 tokenizer:
-  name: "TucanoBR/Tucano-2b4-Instruct"
+  name: "PORTULAN/gervasio-8b-portuguese-ptpt-decoder"
 
 dataset:
   grade_index: 1

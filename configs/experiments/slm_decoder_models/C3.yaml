@@ -1,6 +1,6 @@
 model:
-  name: "TucanoBR/Tucano-2b4-Instruct"
-  type: "tucano_classification_lora"
+  name: "meta-llama/Llama-3.1-8B-Instruct"
+  type: "llama31_classification_lora"
   num_labels: 6
   output_dir: "./results/"
   logging_dir: "./logs/"
@@ -13,7 +13,7 @@ model:
   checkpoint_path: ""
 
 tokenizer:
-  name: "TucanoBR/Tucano-2b4-Instruct"
+  name: "meta-llama/Llama-3.1-8B-Instruct"
 
 dataset:
   grade_index: 2
