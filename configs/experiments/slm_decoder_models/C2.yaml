@@ -1,5 +1,5 @@
 model:
-  name: "PORTULAN/gervasio-8b-portuguese-ptpt-decoder"
+  name: "/tmp/clean_cache/gervasio-8b-portuguese-ptpt-decoder"
   type: "llama31_classification_lora"
   num_labels: 6
   output_dir: "./results/"
@@ -13,11 +13,11 @@ model:
   checkpoint_path: ""
 
 tokenizer:
-  name: "PORTULAN/gervasio-8b-portuguese-ptpt-decoder"
+  name: "/tmp/clean_cache/gervasio-8b-portuguese-ptpt-decoder"
 
 dataset:
   grade_index: 1
-  use_full_context: True 
+  use_full_context: False 
 
 training_params:
   weight_decay: 0.01

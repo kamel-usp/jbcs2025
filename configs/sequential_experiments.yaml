@@ -6,11 +6,13 @@ delay_between_experiments: 0
 
 experiments:
   # Example: Run experiments with different models for each grade
-  - name: "tucano/C1"
+  - name: "gervasio/C1"
     reference: "slm_decoder_models/C1"
-  - name: "tucano/C2"
+  - name: "gervasio/C2"
     reference: "slm_decoder_models/C2"
-  - name: "tucano/C4"
+  - name: "gervasio/C3"
+    reference: "slm_decoder_models/C3"
+  - name: "gervasio/C4"
     reference: "slm_decoder_models/C4"
-  - name: "tucano/C5"
+  - name: "gervasio/C5"
     reference: "slm_decoder_models/C5"

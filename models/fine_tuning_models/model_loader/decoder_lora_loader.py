@@ -55,6 +55,9 @@ class DecoderModelLoraLoader(BaseModelLoader):
         
         # Set padding token
         model.config.pad_token_id = model.config.eos_token_id
+        # Weird bug for Llama-3.1 intruct models
+        if self.model_cfg.name in ["meta-llama/Llama-3.1-8B-Instruct", "/tmp/clean_cache/gervasio-8b-portuguese-ptpt-decoder"]:
+            model.config.pad_token_id = model.config.eos_token_id[0]
         self.logger.info(model.print_trainable_parameters())
         
         return model
