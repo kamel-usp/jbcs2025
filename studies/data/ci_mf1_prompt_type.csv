@@ -1,0 +1,20 @@
+,, ,C1,C1,C2,C2,C3,C3,C4,C4,C5,C5
+Model,Guideline,Context,M_low,M_up,M_low,M_up,M_low,M_up,M_low,M_up,M_low,M_up
+DeepseekR1,Mixed,essay_only,0.10,0.24,0.01,0.08,0.13,0.27,0.12,0.28,0.24,0.39
+DeepseekR1,Student,essay_only,0.05,0.17,0.10,0.20,0.23,0.41,0.15,0.40,0.30,0.44
+DeepseekR1,Grader,essay_only,0.03,0.14,0.00,0.03,0.19,0.37,0.23,0.46,0.28,0.42
+DeepseekR1,Mixed,full_context,0.01,0.12,0.25,0.47,0.21,0.41,0.20,0.41,0.28,0.43
+DeepseekR1,Student,full_context,0.02,0.07,0.19,0.40,0.33,0.57,0.13,0.32,0.29,0.48
+DeepseekR1,Grader,full_context,0.01,0.06,0.19,0.38,0.24,0.40,0.26,0.50,0.30,0.45
+GPT4o,Mixed,essay_only,0.15,0.27,0.11,0.29,0.14,0.26,0.16,0.39,0.25,0.39
+GPT4o,Student,essay_only,0.15,0.29,0.12,0.23,0.18,0.34,0.17,0.42,0.23,0.35
+GPT4o,Grader,essay_only,0.18,0.33,0.07,0.15,0.16,0.31,0.19,0.47,0.19,0.33
+GPT4o,Mixed,full_context,0.19,0.31,0.24,0.44,0.19,0.39,0.19,0.33,0.17,0.31
+GPT4o,Student,full_context,0.15,0.25,0.25,0.50,0.19,0.36,0.16,0.37,0.10,0.23
+GPT4o,Grader,full_context,0.18,0.31,0.24,0.47,0.19,0.38,0.18,0.39,0.09,0.21
+Sabiá3,Mixed,essay_only,0.16,0.32,0.05,0.14,0.20,0.35,0.14,0.34,0.26,0.41
+Sabiá3,Student,essay_only,0.26,0.45,0.05,0.12,0.16,0.31,0.19,0.43,0.23,0.36
+Sabiá3,Grader,essay_only,0.07,0.12,0.08,0.18,0.08,0.16,0.13,0.25,0.16,0.26
+Sabiá3,Mixed,full_context,0.17,0.33,0.24,0.48,0.23,0.48,0.20,0.45,0.20,0.36
+Sabiá3,Student,full_context,0.26,0.50,0.20,0.41,0.12,0.33,0.15,0.42,0.19,0.35
+Sabiá3,Grader,full_context,0.08,0.12,0.11,0.22,0.14,0.27,0.13,0.25,0.16,0.28
